@@ -1,0 +1,26 @@
+{
+  "name": "lanforge-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace=packages/server run dev",
+    "build:server": "npm --workspace=packages/server run build",
+    "test:server": "npm --workspace=packages/server run test",
+    "dev:app": "npm --workspace=packages/app run dev",
+    "build:app": "npm --workspace=packages/app run build",
+    "tauri:dev": "npm --workspace=packages/app run tauri:dev",
+    "tauri:build": "npm --workspace=packages/app run tauri:build"
+  },
+  "keywords": [
+    "p2p",
+    "lan",
+    "gaming",
+    "virtual-network",
+    "radmin-alternative"
+  ],
+  "author": "LANForge Team",
+  "license": "MIT"
+}
