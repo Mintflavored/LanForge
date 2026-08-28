@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "LANForge — P2P Virtual LAN Gaming Hub",
         "width": 1080,
         "height": 720,
