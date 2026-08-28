@@ -6,6 +6,8 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "concurrently -n \"SERVER,APP\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run dev:server\" \"npm run dev:app\"",
+    "start:desktop": "concurrently -n \"SERVER,TAURI\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run dev:server\" \"npm run tauri:dev\"",
     "dev:server": "npm --workspace=packages/server run dev",
     "build:server": "npm --workspace=packages/server run build",
     "test:server": "npm --workspace=packages/server run test",
@@ -13,6 +15,9 @@
     "build:app": "npm --workspace=packages/app run build",
     "tauri:dev": "npm --workspace=packages/app run tauri:dev",
     "tauri:build": "npm --workspace=packages/app run tauri:build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4"
   },
   "keywords": [
     "p2p",
