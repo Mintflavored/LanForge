@@ -72,17 +72,6 @@ fn init_wintun_adapter(virtual_ip: String) -> Result<bool, String> {
 }
 
 pub fn run() {
-    #[cfg(target_os = "windows")]
-    {
-        // Fix for WebView2 environment crashing on some Windows host configurations
-        if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
-            std::env::set_var(
-                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-                "--disable-features=msWebOOUI,msPdfOOUI --no-sandbox",
-            );
-        }
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
