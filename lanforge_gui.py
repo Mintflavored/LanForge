@@ -112,14 +112,15 @@ atexit.register(stop_backend_server)
 class JsApi:
     """JS Bridge allowing UI to interact with Windows Native features."""
 
-    def update_presence(self, details, state, party_size=None, party_max=16, room_code=None):
+    def update_presence(self, details, state, party_size=None, party_max=16, room_code=None, game_preset=None):
         try:
             discord.set_activity(
                 details=details,
                 state=state,
                 party_size=party_size,
                 party_max=party_max,
-                room_code=room_code
+                room_code=room_code,
+                game_preset=game_preset
             )
         except Exception as e:
             print(f"[Discord RPC Error] {e}")

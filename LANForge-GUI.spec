@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('ui', 'ui'), ('app_icon.png', '.')]
+datas = [('ui', 'ui'), ('app_icon.png', '.'), ('discord_banner.png', '.')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('webview')

@@ -1088,7 +1088,8 @@
               `Игра: ${preset.name}`,
               peersCount,
               currentRoom.maxPeers || 16,
-              currentRoom.code
+              currentRoom.code,
+              currentRoom.gamePreset
             );
           }
           if (window.pywebview.api.update_tray) {

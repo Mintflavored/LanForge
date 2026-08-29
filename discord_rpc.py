@@ -29,7 +29,6 @@ class DiscordRPC:
         for i in range(10):
             pipe_path = rf"\\.\pipe\discord-ipc-{i}"
             try:
-                # Open pipe with binary read/write
                 pipe = open(pipe_path, "w+b", buffering=0)
                 return pipe
             except Exception:
@@ -79,15 +78,18 @@ class DiscordRPC:
                 return True
         return False
 
-    def set_activity(self, details="В главном меню", state="P2P Gaming Hub v1.5.0", party_size=None, party_max=16, room_code=None):
+    def set_activity(self, details="В главном меню", state="P2P Gaming Hub v1.5.0", party_size=None, party_max=16, room_code=None, game_preset=None):
         with self.lock:
+            large_key = game_preset if game_preset else "app_icon"
             activity = {
                 "details": details,
                 "state": state,
                 "timestamps": {"start": self.start_time},
                 "assets": {
-                    "large_image": "app_icon",
-                    "large_text": "LANForge — P2P Virtual LAN"
+                    "large_image": large_key,
+                    "large_text": "LANForge — Virtual LAN Hub",
+                    "small_image": "app_icon",
+                    "small_text": "P2P Virtual Network"
                 }
             }
             if party_size is not None and room_code:
