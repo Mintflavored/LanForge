@@ -1,7 +1,7 @@
 @echo off
 title LANForge Launcher
 echo ========================================================
-echo   LANForge - P2P Virtual LAN Gaming Hub (v1.3.0)
+echo   LANForge - P2P Virtual LAN Gaming Hub (v1.5.0)
 echo ========================================================
 echo [*] Checking and cleaning previous instances...
 taskkill /F /IM lanforge-server.exe /T >nul 2>&1
