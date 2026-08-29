@@ -172,7 +172,7 @@ def main():
     tray.start()
 
     # Initial Discord RPC Status
-    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.5.0")
+    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.0")
 
     api = JsApi()
 
@@ -180,9 +180,9 @@ def main():
         title="LANForge",
         url=html_path,
         js_api=api,
-        width=980,
-        height=640,
-        min_size=(860, 540),
+        width=1040,
+        height=660,
+        min_size=(940, 580),
         background_color="#09090b",
         easy_drag=False
     )
