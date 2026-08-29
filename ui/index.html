@@ -1023,7 +1023,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.3</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.4</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1163,10 +1163,9 @@
 
       ws.onopen = () => {
         connectionAttempts = 0;
-        console.log("[WS] Connected to Signaling Engine");
+        console.log("[WS] Connected to Signaling Engine at:", currentServerUrl);
         startPingHeartbeat();
         updateConnectionStatus(true);
-        showToast("Подключено к серверу сети");
       };
 
       ws.onmessage = (event) => {
@@ -1187,27 +1186,30 @@
         connectionAttempts++;
         if (pingTimer) clearInterval(pingTimer);
 
-        // Retry connection without overwriting user settings
-        setTimeout(() => connectWebSocket(currentServerUrl), 2000);
+        // Retry connection without spamming or overwriting user settings
+        setTimeout(() => connectWebSocket(currentServerUrl), 2500);
       };
     }
 
-    function sendWS(payload) {
+    function sendWS(payload, notifyOnError = false) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(payload));
         return true;
-      } else {
-        showToast("⚠️ Нет связи с сервером! Подключение...");
-        connectWebSocket("ws://127.0.0.1:8787");
-        return false;
       }
+      if (notifyOnError) {
+        showToast("⚠️ Нет связи с сервером! Подключение...");
+        connectWebSocket(currentServerUrl);
+      }
+      return false;
     }
 
     function startPingHeartbeat() {
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = setInterval(() => {
-        sendWS({ type: "ping", timestamp: Date.now() });
-      }, 2000);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
+        }
+      }, 3000);
     }
 
     // TACTICAL AUDIO SYNTHESIZER (Web Audio API)
@@ -1879,7 +1881,7 @@
         password: password,
         hostNick: myNick || "Player",
         maxPeers: 16
-      });
+      }, true);
 
       if (sent) {
         closeModals();
@@ -1901,7 +1903,7 @@
         code: code,
         nick: myNick || "Player",
         password: password
-      });
+      }, true);
 
       if (sent) {
         closeModals();
@@ -1977,6 +1979,12 @@
 
     function showToast(text) {
       const container = document.getElementById("toast-container");
+      if (!container) return;
+
+      while (container.children.length >= 2) {
+        container.removeChild(container.firstChild);
+      }
+
       const toast = document.createElement("div");
       toast.className = "toast";
       toast.innerHTML = `<span style="color: var(--accent);">●</span> ${escapeHtml(text)}`;
@@ -1987,7 +1995,7 @@
         toast.style.opacity = "0";
         toast.style.transform = "translateY(-10px)";
         setTimeout(() => toast.remove(), 200);
-      }, 2400);
+      }, 2200);
     }
   </script>
 </body>
