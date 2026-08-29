@@ -940,15 +940,15 @@
             <span>MTU И БУФЕРЫ</span>
             <span class="p2p-badge p2p-badge-direct">1420 B</span>
           </div>
-          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">MTU: 1420 (Zero Fragmentation)</div>
-          <div style="font-size: 11px; color: var(--text-muted);">Оптимизировано под игровые пакеты без оверхеда</div>
+          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">MTU: 1420 байт</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Размер пакета без фрагментации UDP</div>
         </div>
       </div>
 
       <!-- STUN BENCHMARK MATRIX -->
       <div class="card" style="padding: 12px 14px; flex: 1;">
         <div class="card-title-badge">
-          <span>МАТРИЦА ЗАДЕРЖЕК ГЛОБАЛЬНОГО STUN-ПУЛА</span>
+          <span>ТЕСТ STUN-СЕРВЕРОВ (RTT)</span>
           <span id="stun-matrix-status" style="font-size: 10px; color: var(--text-dim);">Готов к тестированию</span>
         </div>
         <div class="stun-matrix-grid" id="stun-matrix-container"></div>
@@ -959,7 +959,7 @@
   <!-- CREATE ROOM MODAL -->
   <div class="modal-overlay" id="create-modal" onclick="onOverlayClick(event, 'create-modal')">
     <div class="modal-box">
-      <h3 style="font-size: 16px; margin-bottom: 16px;">Создать виртуальную комнату</h3>
+      <h3 style="font-size: 16px; margin-bottom: 16px;">Создать комнату</h3>
       <label class="card-title-badge">НАЗВАНИЕ КОМНАТЫ</label>
       <input type="text" class="input-field" id="create-room-name" value="Сервер друзей" onkeydown="if(event.key==='Enter') submitCreateRoom()">
       <label class="card-title-badge">ИГРОВОЙ ПРЕСЕТ</label>
