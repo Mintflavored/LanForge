@@ -1,10 +1,10 @@
 """
 LAN Radar View (Automatic Broadcast Sniffer and Discovery)
-Enhanced with animated scanner radar sweep indicator.
 """
 
 import customtkinter as ctk
 from gui.theme import (
+    BG_COLOR,
     BENTO_CARD,
     BENTO_HOVER,
     BENTO_BORDER,
@@ -18,7 +18,7 @@ from gui.anim import RadarScannerAnimation, PulseDotController
 
 class RadarView(ctk.CTkFrame):
     def __init__(self, parent, client, copy_helper):
-        super().__init__(parent, fg_color="transparent", corner_radius=0)
+        super().__init__(parent, fg_color=BG_COLOR, corner_radius=0)
         self.client = client
         self.copy_helper = copy_helper
         self.rendered_count = 0
@@ -45,7 +45,7 @@ class RadarView(ctk.CTkFrame):
 
         self.scan_dot = ctk.CTkLabel(sb_pad, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN)
         self.scan_dot.pack(side="left", padx=(0, 6))
-        self.scan_pulse = PulseDotController(self.scan_dot, color_on=ACCENT_GREEN, color_off="#0c4720", interval_ms=70)
+        self.scan_pulse = PulseDotController(self.scan_dot, color_on=ACCENT_GREEN, color_off="#0c4720", interval_ms=120)
 
         self.scan_status_lbl = ctk.CTkLabel(
             sb_pad,
@@ -55,7 +55,6 @@ class RadarView(ctk.CTkFrame):
         )
         self.scan_status_lbl.pack(side="left")
 
-        # Animated spinning radar scanner
         self.radar_anim = RadarScannerAnimation(self.scan_status_lbl, base_text="СКАНИРОВАНИЕ UDP 255.255.255.255 АКТИВНО")
 
         self.radar_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")

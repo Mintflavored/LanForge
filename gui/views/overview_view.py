@@ -1,10 +1,10 @@
 """
 Overview View (Bento Grid Dashboard with Room Card, Virtual IP, Latency and NAT)
-Enhanced with pulsing indicators and smooth micro-interactions.
 """
 
 import customtkinter as ctk
 from gui.theme import (
+    BG_COLOR,
     BENTO_CARD,
     BENTO_HOVER,
     BENTO_BORDER,
@@ -23,7 +23,7 @@ from gui.anim import PulseDotController
 
 class OverviewView(ctk.CTkFrame):
     def __init__(self, parent, client, on_create_requested, on_join_requested, copy_helper):
-        super().__init__(parent, fg_color="transparent", corner_radius=0)
+        super().__init__(parent, fg_color=BG_COLOR, corner_radius=0)
         self.client = client
         self.on_create_requested = on_create_requested
         self.on_join_requested = on_join_requested
@@ -213,7 +213,7 @@ class OverviewView(ctk.CTkFrame):
         self.p2p_dot.pack(side="left", padx=(0, 4))
 
         ctk.CTkLabel(p2p_row, text="Прямой P2P туннель активен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(side="left")
-        self.p2p_pulse = PulseDotController(self.p2p_dot, color_on=ACCENT_GREEN, color_off="#093818", interval_ms=80)
+        self.p2p_pulse = PulseDotController(self.p2p_dot, color_on=ACCENT_GREEN, color_off="#093818", interval_ms=120)
 
         # Tile 3: NAT Display
         t3 = ctk.CTkFrame(right_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
@@ -255,7 +255,6 @@ class OverviewView(ctk.CTkFrame):
         my_ip = you.get("virtualIp", "10.42.0.1") if you else "10.42.0.1"
         self.ip_val.configure(text=my_ip)
 
-        # Dynamic Game Preset Port Resolution
         preset_id = room.get("gamePreset", "minecraft_java")
         preset = next((p for p in GAME_PRESETS if p["id"] == preset_id), None)
         port = preset["default_port"] if preset else 25565
@@ -284,8 +283,7 @@ class OverviewView(ctk.CTkFrame):
             dot_lbl = ctk.CTkLabel(pr_pad, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN)
             dot_lbl.pack(side="left", padx=(0, 6))
 
-            # Pulse dot for each online peer
-            pulse = PulseDotController(dot_lbl, color_on=ACCENT_GREEN, color_off="#0f5128", interval_ms=75)
+            pulse = PulseDotController(dot_lbl, color_on=ACCENT_GREEN, color_off="#0f5128", interval_ms=120)
             self.active_pulses.append(pulse)
 
             nick_txt = peer.get("nick", "User")

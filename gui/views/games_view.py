@@ -1,10 +1,11 @@
 """
 Games Catalog View (Bento Grid Architecture — 2-Column High-Speed Layout)
-Zero scrollbar canvas overhead, zero waterfall redraws, 100% instantaneous atomic display.
+Opaque background, zero scrollbar canvas overhead, zero waterfall redraws.
 """
 
 import customtkinter as ctk
 from gui.theme import (
+    BG_COLOR,
     BENTO_CARD,
     BENTO_HOVER,
     BENTO_BORDER,
@@ -19,7 +20,7 @@ from gui.presets_data import GAME_PRESETS
 
 class GamesView(ctk.CTkFrame):
     def __init__(self, parent, on_preset_selected):
-        super().__init__(parent, fg_color="transparent", corner_radius=0)
+        super().__init__(parent, fg_color=BG_COLOR, corner_radius=0)
         self.on_preset_selected = on_preset_selected
         self.preset_filter = "Все"
         self.search_query = ""
@@ -156,12 +157,10 @@ class GamesView(ctk.CTkFrame):
 
     def _apply_filter(self):
         """Arranges matching cards into a 2-column Bento Grid instantly."""
-        # Unmap all currently placed grid items
         for p in GAME_PRESETS:
             card, _, _ = self.card_widgets[p["id"]]
             card.grid_forget()
 
-        # Find matching items
         matching = []
         for p in GAME_PRESETS:
             card, name_lower, category = self.card_widgets[p["id"]]
@@ -170,7 +169,6 @@ class GamesView(ctk.CTkFrame):
             if matches_cat and matches_search:
                 matching.append(card)
 
-        # Place into 2-Column Bento Grid
         for idx, card in enumerate(matching):
             row_idx = idx // 2
             col_idx = idx % 2
