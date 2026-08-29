@@ -61,9 +61,9 @@ class TopNavBar(ctk.CTkFrame):
         self.tabs_bar.pack(side="left", padx=24)
         self.tabs_bar.pack_propagate(False)
 
-        # Sliding Animated Highlight Pill
-        self.pill = ctk.CTkFrame(self.tabs_bar, fg_color="#242429", corner_radius=6, border_width=1, border_color="#3f3f46")
-        self.pill.place(x=4, y=4, width=82, height=28)
+        # Sliding Animated Highlight Pill (width & height passed to constructor)
+        self.pill = ctk.CTkFrame(self.tabs_bar, width=82, height=28, fg_color="#242429", corner_radius=6, border_width=1, border_color="#3f3f46")
+        self.pill.place(x=4, y=4)
         self.slider = SlidingTabIndicator(self.tabs_bar, self.pill)
 
         # Tabs Layout

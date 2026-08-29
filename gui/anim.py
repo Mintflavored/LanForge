@@ -26,7 +26,7 @@ def lerp_color(color_a, color_b, t):
 def animate_view_reveal(container, current_view, next_view, on_complete=None):
     """
     Smooth, visibly distinct vertical slide-up reveal transition (Raycast / Linear style).
-    Moves incoming view from y=+32px to y=0px with cubic ease-out over ~200ms.
+    Moves incoming view from y=+32px to y=0px with cubic ease-out over ~180ms.
     """
     if current_view and current_view != next_view:
         current_view.place_forget()
@@ -44,7 +44,6 @@ def animate_view_reveal(container, current_view, next_view, on_complete=None):
 
         if step_idx <= total_steps:
             t = step_idx / total_steps
-            # Ease-out cubic: 1 - (1-t)^3
             ease = 1 - math.pow(1 - t, 3)
             current_y = int(start_offset_y * (1.0 - ease))
             next_view.place_configure(y=current_y)
@@ -66,8 +65,8 @@ class SlidingTabIndicator:
         self.pill = pill_widget
         self.current_x = 4
         self.target_x = 4
-        self.current_w = 80
-        self.target_w = 80
+        self.current_w = 82
+        self.target_w = 82
         self.animating = False
 
     def slide_to(self, target_x, target_w):
@@ -85,13 +84,15 @@ class SlidingTabIndicator:
             new_x = int(start_x + (self.target_x - start_x) * ease)
             new_w = int(start_w + (self.target_w - start_w) * ease)
 
-            self.pill.place_configure(x=new_x, width=new_w)
+            self.pill.configure(width=new_w)
+            self.pill.place_configure(x=new_x)
             self.current_x = new_x
             self.current_w = new_w
             self.container.update_idletasks()
             self.container.after(16, lambda: self._step(step_idx + 1, total_steps, start_x, start_w))
         else:
-            self.pill.place_configure(x=self.target_x, width=self.target_w)
+            self.pill.configure(width=self.target_w)
+            self.pill.place_configure(x=self.target_x)
             self.current_x = self.target_x
             self.current_w = self.target_w
             self.animating = False
