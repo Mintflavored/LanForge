@@ -609,27 +609,30 @@
 
     <!-- 5. DIAG VIEW -->
     <section id="view-diag" class="view-pane">
-      <h2 style="font-size: 18px; margin-bottom: 12px;">Сетевая диагностика и телеметрия</h2>
+      <h2 style="font-size: 18px; margin-bottom: 4px;">Сетевая диагностика и телеметрия</h2>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        Автоматическая адаптация под Clash Verge, системные прокси, WireGuard/VPN и кастомный DNS.
+      </p>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1;">
         <div class="card">
           <div class="card-title-badge">NAT ТИП И ТОПОЛОГИЯ</div>
-          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">Restricted Cone NAT</div>
-          <div style="font-size: 12px; color: var(--green);">Прямое P2P-соединение возможно без TURN-реле</div>
+          <div id="diag-nat-lbl" style="font-size: 16px; font-weight: 700; margin: 6px 0;">Restricted Cone NAT</div>
+          <div id="diag-nat-desc" style="font-size: 12px; color: var(--green);">Прямое P2P-соединение активно</div>
         </div>
         <div class="card">
-          <div class="card-title-badge">STUN СЕРВЕРЫ</div>
-          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">stun.l.google.com:19302</div>
-          <div style="font-size: 12px; color: var(--green);">Обнаружение публичного IP и порта активно (RTT &lt; 15ms)</div>
+          <div class="card-title-badge">STUN СЕРВЕРЫ (MULTI-POOL)</div>
+          <div id="diag-stun-lbl" style="font-size: 16px; font-weight: 700; margin: 6px 0;">Multi-STUN Pool (Google / Cloudflare / Twilio)</div>
+          <div style="font-size: 12px; color: var(--green);">Защита от DNS-спуфинга и Fake-IP (RTT &lt; 15ms)</div>
         </div>
         <div class="card">
-          <div class="card-title-badge">UPNP IGD МАРШРУТИЗАЦИЯ</div>
-          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">Совместимый шлюз найден</div>
-          <div style="font-size: 12px; color: var(--green);">Автоматический проброс игровых портов включен</div>
+          <div class="card-title-badge">ПРОКСИ И VPN-МАРШРУТИЗАЦИЯ</div>
+          <div id="diag-vpn-lbl" style="font-size: 16px; font-weight: 700; margin: 6px 0;">Proxy Bypass: 127.0.0.1 / 10.42.*</div>
+          <div style="font-size: 12px; color: var(--green);">Изолированный локальный цикл (Clash / V2Ray / TUN Safe)</div>
         </div>
         <div class="card">
           <div class="card-title-badge">MTU И БУФЕРЫ</div>
           <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">MTU: 1420 (Виртуальный туннель)</div>
-          <div style="font-size: 12px; color: var(--text-muted);">Оптимизировано для отсутствия фрагментации пакетов</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Без фрагментации UDP при любых VPN-сигнатурах</div>
         </div>
       </div>
     </section>

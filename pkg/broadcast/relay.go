@@ -19,7 +19,7 @@ type DiscoveredGame struct {
 	Motd       string `json:"motd"`
 }
 
-// RelayManager listens to LAN broadcast packets and notifies discovered games.
+// RelayManager listens to LAN broadcast packets across all active physical interfaces.
 type RelayManager struct {
 	listeners []chan DiscoveredGame
 	running   bool
@@ -44,7 +44,7 @@ func (r *RelayManager) Subscribe() chan DiscoveredGame {
 	return ch
 }
 
-// Start begins listening to UDP broadcast packets (port 4445 for Minecraft LAN, etc).
+// Start begins listening to UDP broadcast packets across all physical network adapters.
 func (r *RelayManager) Start() {
 	r.mu.Lock()
 	if r.running {
@@ -54,10 +54,14 @@ func (r *RelayManager) Start() {
 	r.running = true
 	r.mu.Unlock()
 
-	go r.listenMinecraftBroadcast()
+	// 1. Primary listener on 0.0.0.0:4445
+	go r.listenBroadcastPort(4445)
+
+	// 2. Secondary listener on Multicast 224.0.2.60:4445 (Minecraft LAN standard)
+	go r.listenMulticast("224.0.2.60:4445")
 }
 
-// Stop stops the broadcast listener.
+// Stop stops the broadcast listeners.
 func (r *RelayManager) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -79,8 +83,8 @@ func (r *RelayManager) emit(game DiscoveredGame) {
 	}
 }
 
-func (r *RelayManager) listenMinecraftBroadcast() {
-	addr, err := net.ResolveUDPAddr("udp4", "0.0.0.0:4445")
+func (r *RelayManager) listenBroadcastPort(port int) {
+	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		return
 	}
@@ -105,39 +109,74 @@ func (r *RelayManager) listenMinecraftBroadcast() {
 			continue
 		}
 
-		text := string(buf[:n])
-		// Minecraft LAN format: [MOTD]World Name[/MOTD][AD]Port[/AD]
-		if strings.Contains(text, "[MOTD]") && strings.Contains(text, "[/MOTD]") {
-			motdStart := strings.Index(text, "[MOTD]") + 6
-			motdEnd := strings.Index(text, "[/MOTD]")
-			motd := "Minecraft LAN World"
-			if motdEnd > motdStart {
-				motd = text[motdStart:motdEnd]
-			}
+		r.parsePacket(buf[:n], src)
+	}
+}
 
-			port := 25565
-			if strings.Contains(text, "[AD]") && strings.Contains(text, "[/AD]") {
-				adStart := strings.Index(text, "[AD]") + 4
-				adEnd := strings.Index(text, "[/AD]")
-				if adEnd > adStart {
-					_, _ = fmt.Sscanf(text[adStart:adEnd], "%d", &port)
-				}
-			}
+func (r *RelayManager) listenMulticast(groupAddr string) {
+	maddr, err := net.ResolveUDPAddr("udp4", groupAddr)
+	if err != nil {
+		return
+	}
 
-			hostIP := "127.0.0.1"
-			if udpAddr, ok := src.(*net.UDPAddr); ok {
-				hostIP = udpAddr.IP.String()
-			}
+	conn, err := net.ListenMulticastUDP("udp4", nil, maddr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
 
-			r.emit(DiscoveredGame{
-				ID:         fmt.Sprintf("mc_%d", port),
-				GameName:   "Minecraft LAN World",
-				HostNick:   "Local Host",
-				HostIP:     hostIP,
-				Port:       port,
-				DetectedAt: time.Now().UnixMilli(),
-				Motd:       motd,
-			})
+	buf := make([]byte, 2048)
+	for {
+		select {
+		case <-r.stopChan:
+			return
+		default:
 		}
+
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, src, err := conn.ReadFrom(buf)
+		if err != nil {
+			continue
+		}
+
+		r.parsePacket(buf[:n], src)
+	}
+}
+
+func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
+	text := string(data)
+
+	// Minecraft LAN format: [MOTD]World Name[/MOTD][AD]Port[/AD]
+	if strings.Contains(text, "[MOTD]") && strings.Contains(text, "[/MOTD]") {
+		motdStart := strings.Index(text, "[MOTD]") + 6
+		motdEnd := strings.Index(text, "[/MOTD]")
+		motd := "Minecraft LAN World"
+		if motdEnd > motdStart {
+			motd = text[motdStart:motdEnd]
+		}
+
+		port := 25565
+		if strings.Contains(text, "[AD]") && strings.Contains(text, "[/AD]") {
+			adStart := strings.Index(text, "[AD]") + 4
+			adEnd := strings.Index(text, "[/AD]")
+			if adEnd > adStart {
+				_, _ = fmt.Sscanf(text[adStart:adEnd], "%d", &port)
+			}
+		}
+
+		hostIP := "127.0.0.1"
+		if udpAddr, ok := src.(*net.UDPAddr); ok {
+			hostIP = udpAddr.IP.String()
+		}
+
+		r.emit(DiscoveredGame{
+			ID:         fmt.Sprintf("mc_%d", port),
+			GameName:   "Minecraft LAN World",
+			HostNick:   "Local Host",
+			HostIP:     hostIP,
+			Port:       port,
+			DetectedAt: time.Now().UnixMilli(),
+			Motd:       motd,
+		})
 	}
 }

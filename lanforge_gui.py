@@ -1,19 +1,31 @@
 """
-LANForge Desktop Launcher (GPU-Accelerated Edge WebView2 Architecture)
-DirectX 11/12 GPU composition, 144Hz V-Sync, sub-millisecond tab switching.
+LANForge Desktop Launcher (GPU-Accelerated & Proxy/VPN Resilient)
+DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe.
 """
 
 import os
 import sys
+
+# Ensure local loopback connections completely bypass system proxies & Clash Verge
+PROXY_BYPASS = "localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12,*.local,10.42.*"
+os.environ["NO_PROXY"] = PROXY_BYPASS
+os.environ["no_proxy"] = PROXY_BYPASS
+
+# Edge WebView2 Chromium flags for proxy bypass and high performance
+os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
+    f"--proxy-bypass-list={PROXY_BYPASS} "
+    "--enable-gpu-rasterization "
+    "--enable-zero-copy "
+    "--disable-features=OutOfProcessOpengl"
+)
+
 import webview
 
 # Determine root directory (both in development and PyInstaller bundled mode)
 if getattr(sys, 'frozen', False):
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    # If in bin/ directory, move to workspace root
     base_dir = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() == "bin" else exe_dir
     html_path = os.path.join(base_dir, "ui", "index.html")
-    # Fallback to PyInstaller temp directory
     if not os.path.exists(html_path):
         html_path = os.path.join(sys._MEIPASS, "ui", "index.html")
 else:
@@ -21,7 +33,6 @@ else:
     html_path = os.path.join(base_dir, "ui", "index.html")
 
 def main():
-    # Create native Windows WebView2 hardware-accelerated window
     window = webview.create_window(
         title="LANForge",
         url=html_path,
@@ -31,7 +42,6 @@ def main():
         background_color="#09090b",
         easy_drag=False
     )
-    # Start WebView2 with Edge Chromium engine and hardware acceleration
     webview.start(gui="edgechromium", debug=False)
 
 if __name__ == "__main__":
