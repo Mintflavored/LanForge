@@ -69,11 +69,16 @@ def start_backend_server():
         if is_port_open("127.0.0.1", 8787):
             return  # Server already running
 
-        candidates = [
+        candidates = []
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            candidates.append(os.path.join(sys._MEIPASS, "lanforge-server.exe"))
+            candidates.append(os.path.join(sys._MEIPASS, "bin", "lanforge-server.exe"))
+        candidates.extend([
             os.path.join(exe_dir, "lanforge-server.exe"),
+            os.path.join(exe_dir, "bin", "lanforge-server.exe"),
             os.path.join(base_dir, "bin", "lanforge-server.exe"),
             os.path.join(base_dir, "lanforge-server.exe")
-        ]
+        ])
         server_bin = None
         for cand in candidates:
             if cand and os.path.exists(cand):
@@ -87,7 +92,7 @@ def start_backend_server():
                 cwd=os.path.dirname(server_bin),
                 creationflags=creation_flags
             )
-            for _ in range(25):
+            for _ in range(30):
                 time.sleep(0.1)
                 if is_port_open("127.0.0.1", 8787):
                     break
