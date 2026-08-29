@@ -75,6 +75,7 @@ def start_backend_server():
         creation_flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
         server_proc = subprocess.Popen(
             [server_bin, "-port", "8787"],
+            cwd=base_dir,
             creationflags=creation_flags
         )
         for _ in range(15):
