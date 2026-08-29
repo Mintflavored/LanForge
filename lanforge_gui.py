@@ -182,7 +182,8 @@ def main():
         js_api=api,
         width=1040,
         height=660,
-        resizable=False,
+        min_size=(1040, 660),
+        resizable=True,
         background_color="#09090b",
         easy_drag=False
     )
