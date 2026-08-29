@@ -18,7 +18,7 @@ except ImportError:
     from gui.presets_data import GAME_PRESETS
     from gui.network_client import NetworkClient
 
-# Swiss Brutalism & Bento Grid Palette (High Performance Edition)
+# Swiss Brutalism & Bento Grid Palette (Bug-Free & High Performance Edition)
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -156,7 +156,6 @@ class LANForgeApp(ctk.CTk):
         self.main_container.grid(row=1, column=0, sticky="nsew", padx=20, pady=(4, 16))
 
     def _setup_tab_frames(self):
-        # Instantiate each frame ONCE for instant 0ms cached switching
         self.tab_frames = {}
 
         self.tab_frames["overview"] = ctk.CTkFrame(self.main_container, fg_color="transparent", corner_radius=0)
@@ -179,7 +178,6 @@ class LANForgeApp(ctk.CTk):
             else:
                 btn.configure(fg_color="transparent", text_color=TEXT_MUTED)
 
-        # Hide all, show selected (0ms overhead)
         for t, frame in self.tab_frames.items():
             if t == tab_id:
                 frame.pack(fill="both", expand=True)
@@ -187,7 +185,7 @@ class LANForgeApp(ctk.CTk):
                 frame.pack_forget()
 
     # ----------------------------------------------------
-    # TAB: OVERVIEW (Built Once, In-Place Value Updates)
+    # TAB: OVERVIEW (Dynamic Port & In-Place State Updates)
     # ----------------------------------------------------
     def _build_overview_ui(self):
         frame = self.tab_frames["overview"]
@@ -289,7 +287,7 @@ class LANForgeApp(ctk.CTk):
         )
         self.ov_code_btn.pack(side="left", padx=12)
 
-        # Connect string bar
+        # Direct Connect String Block
         connect_box = ctk.CTkFrame(self.ov_active_frame, fg_color="#18181c", corner_radius=8, border_width=1, border_color=BENTO_BORDER)
         connect_box.pack(fill="x", pady=(0, 12))
 
@@ -308,8 +306,7 @@ class LANForgeApp(ctk.CTk):
             fg_color="#27272a",
             hover_color=BENTO_HOVER,
             font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
-            text_color=TEXT_MAIN,
-            command=lambda: self._copy("10.42.0.1:25565", "Адрес скопирован")
+            text_color=TEXT_MAIN
         )
         self.ov_direct_btn.pack(side="right")
 
@@ -350,7 +347,7 @@ class LANForgeApp(ctk.CTk):
             border_color=BENTO_BORDER,
             font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"),
             text_color=TEXT_SECONDARY,
-            command=lambda: self._copy(self.ov_ip_val.cget("text"), "IP скопирован")
+            command=self._copy_my_ip
         )
         self.ov_ip_btn.pack(anchor="w")
 
@@ -377,12 +374,18 @@ class LANForgeApp(ctk.CTk):
         ctk.CTkLabel(t3_pad, text="Restricted Cone NAT", font=ctk.CTkFont(family=FONT_SANS, size=14, weight="bold"), text_color=TEXT_MAIN).pack(anchor="w", pady=(2, 2))
         ctk.CTkLabel(t3_pad, text="UPnP IGD авто-проброс портов включен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(anchor="w")
 
+    def _copy_my_ip(self):
+        val = self.ov_ip_val.cget("text")
+        if val and val != "10.42.0.X":
+            self._copy_with_feedback(self.ov_ip_btn, "Копировать IP", val)
+
     def _update_overview_state(self):
         room = self.client.room
         if not room:
             self.ov_active_frame.pack_forget()
             self.ov_standby_frame.pack(fill="both", expand=True)
             self.ov_ip_val.configure(text="10.42.0.X")
+            self._reset_chat_history()
             return
 
         self.ov_standby_frame.pack_forget()
@@ -390,15 +393,30 @@ class LANForgeApp(ctk.CTk):
 
         code_str = room.get("code", "LAN-XXXX")
         self.ov_room_title.configure(text=room.get("name", "Комната"))
-        self.ov_code_btn.configure(text=f"{code_str} 📋", command=lambda: self._copy(code_str, "Код скопирован"))
+        self.ov_code_btn.configure(
+            text=f"{code_str} 📋",
+            command=lambda: self._copy_with_feedback(self.ov_code_btn, f"{code_str} 📋", code_str)
+        )
 
         my_ip = self.client.you.get("virtualIp", "10.42.0.1") if self.client.you else "10.42.0.1"
         self.ov_ip_val.configure(text=my_ip)
 
+        # Dynamic Game Preset Port Resolution
+        preset_id = room.get("gamePreset", "minecraft_java")
+        preset = next((p for p in GAME_PRESETS if p["id"] == preset_id), None)
+        port = preset["default_port"] if preset else 25565
+        host_ip = "10.42.0.1"
+        direct_addr = f"{host_ip}:{port}"
+
+        self.ov_direct_lbl.configure(text=f"Адрес хоста в игре:  {direct_addr}")
+        self.ov_direct_btn.configure(
+            text="Копировать адрес",
+            command=lambda: self._copy_with_feedback(self.ov_direct_btn, "Копировать адрес", direct_addr)
+        )
+
         peers = room.get("peers", [])
         self.ov_peers_header.configure(text=f"Участники ({len(peers)}/{room.get('maxPeers', 16)}):")
 
-        # Update peers list smoothly
         for w in self.ov_peers_scroll.winfo_children():
             w.destroy()
 
@@ -420,7 +438,7 @@ class LANForgeApp(ctk.CTk):
             ctk.CTkLabel(pr_pad, text=nick_txt, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
             v_ip = peer.get("virtualIp", "")
-            ctk.CTkButton(
+            ip_btn = ctk.CTkButton(
                 pr_pad,
                 text=f"{v_ip} 📋",
                 height=20,
@@ -429,9 +447,10 @@ class LANForgeApp(ctk.CTk):
                 fg_color="#202024",
                 hover_color=BENTO_HOVER,
                 font=ctk.CTkFont(family=FONT_MONO, size=10),
-                text_color=TEXT_SECONDARY,
-                command=lambda target_ip=v_ip: self._copy(target_ip, f"IP {target_ip} скопирован")
-            ).pack(side="left", padx=12)
+                text_color=TEXT_SECONDARY
+            )
+            ip_btn.configure(command=lambda b=ip_btn, target=v_ip: self._copy_with_feedback(b, f"{target} 📋", target))
+            ip_btn.pack(side="left", padx=12)
 
             ping = peer.get("pingMs", 0)
             p_str = f"{ping} ms" if ping > 0 else "< 1 ms"
@@ -449,7 +468,6 @@ class LANForgeApp(ctk.CTk):
 
         ctk.CTkLabel(header, text="Каталог игр", font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
-        # Category chips
         f_box = ctk.CTkFrame(frame, fg_color="transparent")
         f_box.pack(fill="x", pady=(0, 10))
 
@@ -575,7 +593,7 @@ class LANForgeApp(ctk.CTk):
                 info_str = f"{g['name']}  |  {g['host_ip']}:{g['port']}"
                 ctk.CTkLabel(c_pad, text=info_str, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
-                ctk.CTkButton(
+                copy_btn = ctk.CTkButton(
                     c_pad,
                     text="Копировать адрес",
                     height=22,
@@ -583,9 +601,11 @@ class LANForgeApp(ctk.CTk):
                     corner_radius=4,
                     fg_color="#1e1e24",
                     hover_color=BENTO_HOVER,
-                    font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"),
-                    command=lambda target=f"{g['host_ip']}:{g['port']}": self._copy(target, "Адрес скопирован")
-                ).pack(side="right")
+                    font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold")
+                )
+                target_str = f"{g['host_ip']}:{g['port']}"
+                copy_btn.configure(command=lambda b=copy_btn, t=target_str: self._copy_with_feedback(b, "Копировать адрес", t))
+                copy_btn.pack(side="right")
 
     # ----------------------------------------------------
     # TAB: CHAT UI
@@ -630,6 +650,13 @@ class LANForgeApp(ctk.CTk):
             command=self._send_chat
         )
         send_btn.pack(side="right")
+
+    def _reset_chat_history(self):
+        self.rendered_chat_count = 0
+        for w in self.chat_feed.winfo_children():
+            w.destroy()
+        self.chat_empty_lbl = ctk.CTkLabel(self.chat_feed, text="Сообщений пока нет.", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED)
+        self.chat_empty_lbl.pack(pady=25)
 
     def _append_chat_message(self, msg):
         if self.rendered_chat_count == 0 and self.chat_empty_lbl.winfo_exists():
@@ -680,7 +707,7 @@ class LANForgeApp(ctk.CTk):
             ctk.CTkLabel(r, text=val, font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MAIN).pack(side="left")
 
     # ----------------------------------------------------
-    # DIALOGS
+    # DIALOGS & POPUPS
     # ----------------------------------------------------
     def _open_create_dialog(self, default_preset=None):
         dlg = ctk.CTkToplevel(self)
@@ -688,6 +715,7 @@ class LANForgeApp(ctk.CTk):
         dlg.geometry("380x320")
         dlg.resizable(False, False)
         dlg.configure(fg_color=BG_COLOR)
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
         dlg.grab_set()
 
         p = ctk.CTkFrame(dlg, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
@@ -724,6 +752,7 @@ class LANForgeApp(ctk.CTk):
         dlg.geometry("360x240")
         dlg.resizable(False, False)
         dlg.configure(fg_color=BG_COLOR)
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
         dlg.grab_set()
 
         p = ctk.CTkFrame(dlg, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
@@ -747,10 +776,15 @@ class LANForgeApp(ctk.CTk):
 
         ctk.CTkButton(p, text="Подключиться", height=32, corner_radius=6, fg_color=ACCENT_ORANGE, hover_color=ACCENT_ORANGE_HOVER, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), command=submit).pack(fill="x", padx=14)
 
-    def _copy(self, text, message="Скопировано"):
-        self.clipboard_clear()
-        self.clipboard_append(text)
-        self.update()
+    def _copy_with_feedback(self, button, original_text, text_to_copy):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text_to_copy)
+            self.update()
+            button.configure(text="✓ Скопировано")
+            self.after(1200, lambda: button.configure(text=original_text))
+        except Exception:
+            pass
 
     def _bind_client_events(self):
         def on_conn(status):
@@ -782,11 +816,18 @@ class LANForgeApp(ctk.CTk):
             except Exception:
                 pass
 
+        def on_error(err_msg):
+            try:
+                self.after(0, lambda: messagebox.showwarning("Ошибка LANForge", err_msg))
+            except Exception:
+                pass
+
         self.client.on("connection", on_conn)
         self.client.on("room_state", on_room)
         self.client.on("ping", on_ping)
         self.client.on("chat_message", on_chat)
         self.client.on("discovered_game", on_game)
+        self.client.on("error", on_error)
 
 if __name__ == "__main__":
     app = LANForgeApp()

@@ -152,7 +152,7 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password string)
 		return protocol.RoomState{}, protocol.PeerState{}, fmt.Errorf("комната заполнена")
 	}
 
-	if room.Password != "" && room.Password != password {
+	if room.Password != "" && room.Password != strings.TrimSpace(password) {
 		room.Mu.Unlock()
 		return protocol.RoomState{}, protocol.PeerState{}, fmt.Errorf("неверный пароль комнаты")
 	}
