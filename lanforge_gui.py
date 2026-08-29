@@ -23,7 +23,7 @@ else:
 def main():
     # Create native Windows WebView2 hardware-accelerated window
     window = webview.create_window(
-        title="LANForge — P2P Virtual Network",
+        title="LANForge",
         url=html_path,
         width=980,
         height=640,

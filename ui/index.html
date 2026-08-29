@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LANForge — P2P Virtual Network</title>
+  <title>LANForge</title>
   <style>
     :root {
       --bg: #09090b;
@@ -61,6 +61,18 @@
       letter-spacing: 0.05em;
     }
 
+    .brand-logo-icon {
+      margin-right: 10px;
+      display: flex;
+      align-items: center;
+      filter: drop-shadow(0 0 6px rgba(255, 85, 0, 0.4));
+    }
+
+    .brand-text {
+      display: flex;
+      align-items: center;
+    }
+
     .brand-dot {
       color: var(--accent);
       animation: pulse-dot 2s infinite ease-in-out;
@@ -79,19 +91,19 @@
       letter-spacing: 0;
     }
 
-    .author-badge {
-      font-family: var(--font-sans);
-      font-size: 9px;
-      font-weight: 800;
-      color: var(--accent);
-      background: rgba(255, 85, 0, 0.1);
-      border: 1px solid rgba(255, 85, 0, 0.3);
-      padding: 2px 7px;
-      border-radius: 4px;
-      margin-left: 6px;
+    .brand-sub {
+      font-size: 11px;
+      font-weight: 600;
+      color: #71717a;
+      margin-left: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .nervs-red {
+      color: #ef4444;
+      font-weight: 900;
       letter-spacing: 0.06em;
-      text-transform: uppercase;
-      box-shadow: 0 0 8px rgba(255, 85, 0, 0.15);
+      text-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
     }
 
     @keyframes pulse-dot {
@@ -452,9 +464,21 @@
   <!-- HEADER -->
   <header>
     <div class="brand">
-      LANFORGE<span class="brand-dot">.</span>
+      <svg class="brand-logo-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="forgeGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#ff5500"/>
+            <stop offset="1" stop-color="#ef4444"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" stroke="url(#forgeGrad)" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M12 22V12" stroke="url(#forgeGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M21 7L12 12L3 7" stroke="url(#forgeGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="2.2" fill="#ff5500"/>
+      </svg>
+      <span class="brand-text">LANFORGE<span class="brand-dot">.</span></span>
       <span class="version-tag">v1.2.0</span>
-      <span class="author-badge">by NERVS</span>
+      <span class="brand-sub">by <span class="nervs-red">NERVS</span></span>
     </div>
 
     <nav class="nav-tabs">
