@@ -24,8 +24,9 @@ jobs:
           cache: true
 
       - name: Build Go Signaling Engine
+        shell: pwsh
         run: |
-          mkdir -p bin
+          if (!(Test-Path "bin")) { New-Item -ItemType Directory -Force -Path "bin" }
           go build -ldflags="-w -s" -o bin/lanforge-server.exe ./cmd/server
 
       - name: Set up Python
