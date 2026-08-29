@@ -3,7 +3,7 @@ LANForge Desktop Launcher (GPU-Accelerated & Proxy/VPN Resilient)
 DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 import os
 import sys

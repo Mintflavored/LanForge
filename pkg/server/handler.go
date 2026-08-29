@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/lanforge/lanforge/pkg/protocol"
+	"github.com/lanforge/lanforge/pkg/stun"
 )
 
 var upgrader = websocket.Upgrader{
@@ -184,10 +185,28 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		if msg.PingMs != nil {
 			peer.State.PingMs = *msg.PingMs
 		}
+		if msg.JitterMs != nil {
+			peer.State.JitterMs = *msg.JitterMs
+		}
+		if msg.PacketLoss != nil {
+			peer.State.PacketLoss = *msg.PacketLoss
+		}
+		if msg.ConnectionType != "" {
+			peer.State.ConnectionType = msg.ConnectionType
+		}
 		room.Broadcast(protocol.ServerMessage{
 			Type: "peer_updated",
 			Peer: &peer.State,
 		}, "")
+
+	case "probe_stun":
+		go func() {
+			probes := stun.ProbeAllStunServers()
+			_ = peer.SendJSON(protocol.ServerMessage{
+				Type:       "stun_probes_result",
+				StunProbes: probes,
+			})
+		}()
 
 	case "ping":
 		_ = peer.SendJSON(protocol.ServerMessage{
