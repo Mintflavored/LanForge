@@ -129,12 +129,13 @@
       color: var(--text-muted);
       font-size: 12px;
       font-weight: 600;
-      padding: 7px 14px;
+      padding: 6px 12px;
       border-radius: 7px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
+      white-space: nowrap;
       transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -165,6 +166,8 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      margin-left: 20px;
+      flex-shrink: 0;
     }
 
     .header-divider {
@@ -187,6 +190,7 @@
       color: var(--text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
+      flex-shrink: 0;
     }
     .btn-icon:hover {
       background: var(--card-hover);
@@ -214,6 +218,8 @@
       justify-content: center;
       gap: 7px;
       letter-spacing: 0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .btn-primary {
@@ -692,8 +698,6 @@
         <circle cx="12" cy="12" r="2.2" fill="#ff5500"/>
       </svg>
       <span class="brand-text">LANFORGE<span class="brand-dot">.</span></span>
-      <span class="version-tag">v1.6.0</span>
-      <span class="brand-sub">by <span class="nervs-red">NERVS</span></span>
     </div>
 
     <nav class="nav-tabs">
@@ -1036,6 +1040,16 @@
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
         <button class="btn btn-primary" onclick="saveSettings()">Сохранить настройки</button>
+      </div>
+
+      <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span>Версия:</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.0</span>
+        </div>
+        <div>
+          Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
+        </div>
       </div>
     </div>
   </div>
