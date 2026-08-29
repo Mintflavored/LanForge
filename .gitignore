@@ -1,6 +1,19 @@
-node_modules/
+# Build & Dist artifacts
+build/
 dist/
 target/
+*.exe
+*.zip
+*.spec
+*.pyc
+__pycache__/
+
+# Environment & Logs
 .env
-.DS_Store
 *.log
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+.pytest_cache/

@@ -1,0 +1,33 @@
+name: CI Build & Test
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test-go:
+    name: Test Go Engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build and Test
+        run: |
+          go build -v ./...
+          go test -v ./...
+
+  lint-python:
+    name: Validate Python Syntax
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax Check
+        run: |
+          python -m py_compile lanforge_gui.py discord_rpc.py tray_manager.py
