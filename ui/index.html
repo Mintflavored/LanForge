@@ -1001,8 +1001,8 @@
 
       <label class="card-title-badge">СИГНАЛИНГ СЕРВЕР СЕТИ (P2P ХАБ)</label>
       <select class="input-field" id="settings-server-mode" onchange="onServerModeChange()">
-        <option value="local">💻 Встроенный локальный сервер (127.0.0.1:8787) [Рекомендуется]</option>
-        <option value="cloud">🌐 Публичный облачный сервер (Render.com)</option>
+        <option value="cloud">🌐 Глобальный облачный сервер (По умолчанию: lanforge.onrender.com)</option>
+        <option value="local">💻 Встроенный локальный сервер (127.0.0.1:8787)</option>
         <option value="custom">🛠️ Пользовательский сервер (Свой VPS / IP)</option>
       </select>
 
@@ -1012,7 +1012,7 @@
       </div>
 
       <div style="background: #18181c; border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: var(--text-dim); line-height: 1.4;">
-        💡 <b>Подсказка:</b> Для совместной игры через Интернет все друзья должны быть подключены к одному сигналинг-серверу (например, Облачному или вашему VPS).
+        💡 <b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Никаких настроек портов и IP не требуется!
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
@@ -1023,7 +1023,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.4</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.5</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1063,8 +1063,8 @@
 
     let currentRoom = null;
     let myNick = localStorage.getItem("lanforge_nick") || ("Player_" + Math.floor(100 + Math.random() * 900));
-    let currentServerMode = localStorage.getItem("lanforge_server_mode") || "local";
-    let currentServerUrl = localStorage.getItem("lanforge_server_url") || "ws://127.0.0.1:8787";
+    let currentServerMode = localStorage.getItem("lanforge_server_mode") || "cloud";
+    let currentServerUrl = localStorage.getItem("lanforge_server_url") || "wss://lanforge.onrender.com";
     let myVirtualIp = "10.42.0.1";
     let myId = "";
     let selectedCategory = "Все";
@@ -1805,7 +1805,7 @@
     function openSettingsModal() {
       document.getElementById("settings-nick").value = myNick;
       document.getElementById("settings-server-mode").value = currentServerMode;
-      document.getElementById("settings-custom-url").value = currentServerUrl;
+      document.getElementById("settings-custom-url").value = (currentServerMode === "custom") ? currentServerUrl : "";
       onServerModeChange();
       document.getElementById("settings-modal").classList.add("active");
       setTimeout(() => document.getElementById("settings-nick").focus(), 50);
@@ -1824,12 +1824,14 @@
     function saveSettings() {
       const newNick = document.getElementById("settings-nick").value.trim() || myNick;
       const mode = document.getElementById("settings-server-mode").value;
-      let newUrl = "ws://127.0.0.1:8787";
+      let newUrl = "wss://lanforge.onrender.com";
 
       if (mode === "cloud") {
-        newUrl = "wss://lanforge-signaling.onrender.com";
+        newUrl = "wss://lanforge.onrender.com";
+      } else if (mode === "local") {
+        newUrl = "ws://127.0.0.1:8787";
       } else if (mode === "custom") {
-        newUrl = document.getElementById("settings-custom-url").value.trim() || "ws://127.0.0.1:8787";
+        newUrl = document.getElementById("settings-custom-url").value.trim() || "wss://lanforge.onrender.com";
       }
 
       myNick = newNick;
