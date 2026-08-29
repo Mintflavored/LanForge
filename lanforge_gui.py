@@ -1,15 +1,16 @@
 """
-LANForge Desktop Launcher (v1.6.2)
+LANForge Desktop Launcher (v1.6.3)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
 - Hybrid Cloud & Local Signaling support
 """
 
-__version__ = "1.6.2"
+__version__ = "1.6.3"
 
 import os
 import sys
+import json
 import time
 import socket
 import subprocess
@@ -114,8 +115,42 @@ def stop_backend_server():
 
 atexit.register(stop_backend_server)
 
+# AppData configuration directory for persistent storage
+app_data_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "LANForge")
+os.makedirs(app_data_dir, exist_ok=True)
+CONFIG_FILE = os.path.join(app_data_dir, "config.json")
+
+def load_user_config():
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[Config Read Error] {e}")
+    return {}
+
+def save_user_config(data):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"[Config Write Error] {e}")
+        return False
+
 class JsApi:
-    """JS Bridge allowing UI to interact with Windows Native features."""
+    """JS Bridge allowing UI to interact with Windows Native features and persistent config."""
+
+    def get_config(self):
+        return load_user_config()
+
+    def save_config(self, cfg_data):
+        if isinstance(cfg_data, str):
+            try:
+                cfg_data = json.loads(cfg_data)
+            except Exception:
+                pass
+        return save_user_config(cfg_data)
 
     def update_presence(self, details, state, party_size=None, party_max=16, room_code=None, game_preset=None):
         try:
@@ -172,7 +207,7 @@ def main():
     tray.start()
 
     # Initial Discord RPC Status
-    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.2")
+    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.3")
 
     api = JsApi()
 
@@ -195,7 +230,7 @@ def main():
 
     main_window.events.closed += on_closed
 
-    webview.start(gui="edgechromium", debug=False)
+    webview.start(gui="edgechromium", debug=False, storage_path=app_data_dir)
 
 if __name__ == "__main__":
     main()

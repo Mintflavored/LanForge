@@ -1023,7 +1023,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.2</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.3</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1080,6 +1080,11 @@
       renderStunMatrix();
       connectWebSocket(currentServerUrl);
 
+      // Listen for pywebview ready to load persistent native config
+      window.addEventListener("pywebviewready", () => {
+        loadSavedConfig();
+      });
+
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModals();
       });
@@ -1096,6 +1101,32 @@
       document.addEventListener('click', unlockAudio);
       document.addEventListener('keydown', unlockAudio);
     });
+
+    function loadSavedConfig() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_config) {
+        window.pywebview.api.get_config().then(cfg => {
+          if (cfg && typeof cfg === "object" && Object.keys(cfg).length > 0) {
+            if (cfg.nick) {
+              myNick = cfg.nick;
+              localStorage.setItem("lanforge_nick", myNick);
+            }
+            if (cfg.server_mode) {
+              currentServerMode = cfg.server_mode;
+              localStorage.setItem("lanforge_server_mode", currentServerMode);
+            }
+            if (cfg.server_url) {
+              const oldUrl = currentServerUrl;
+              currentServerUrl = cfg.server_url;
+              localStorage.setItem("lanforge_server_url", currentServerUrl);
+              if (oldUrl !== currentServerUrl) {
+                connectWebSocket(currentServerUrl);
+              }
+            }
+            console.log("[Config] Loaded persistent config:", cfg);
+          }
+        }).catch(err => console.warn("[Config Error]", err));
+      }
+    }
 
     // WEBSOCKET CLIENT
     let connectionAttempts = 0;
@@ -1156,18 +1187,7 @@
         connectionAttempts++;
         if (pingTimer) clearInterval(pingTimer);
 
-        // If remote/cloud failed repeatedly, automatically fallback to local embedded server
-        if (connectionAttempts >= 2 && currentServerUrl !== "ws://127.0.0.1:8787" && currentServerMode !== "custom") {
-          console.warn("[WS] Falling back to local backend ws://127.0.0.1:8787");
-          currentServerUrl = "ws://127.0.0.1:8787";
-          currentServerMode = "local";
-          localStorage.setItem("lanforge_server_mode", "local");
-          localStorage.setItem("lanforge_server_url", "ws://127.0.0.1:8787");
-          showToast("Переключение на локальный сервер...");
-          setTimeout(() => connectWebSocket("ws://127.0.0.1:8787"), 500);
-          return;
-        }
-
+        // Retry connection without overwriting user settings
         setTimeout(() => connectWebSocket(currentServerUrl), 2000);
       };
     }
@@ -1812,16 +1832,26 @@
 
       myNick = newNick;
       currentServerMode = mode;
+      currentServerUrl = newUrl;
+
+      // Persist in localStorage
       localStorage.setItem("lanforge_nick", myNick);
       localStorage.setItem("lanforge_server_mode", currentServerMode);
-      localStorage.setItem("lanforge_server_url", newUrl);
+      localStorage.setItem("lanforge_server_url", currentServerUrl);
+
+      // Persist in native AppData config.json
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_config) {
+        window.pywebview.api.save_config({
+          nick: myNick,
+          server_mode: currentServerMode,
+          server_url: currentServerUrl
+        });
+      }
 
       closeModals();
       showToast("Настройки профиля сохранены");
 
-      if (newUrl !== currentServerUrl) {
-        connectWebSocket(newUrl);
-      }
+      connectWebSocket(currentServerUrl);
     }
 
     function closeModals() {
