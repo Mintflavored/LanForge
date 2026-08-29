@@ -1,5 +1,6 @@
 """
 Overview View (Bento Grid Dashboard with Room Card, Virtual IP, Latency and NAT)
+Enhanced with pulsing indicators and smooth micro-interactions.
 """
 
 import customtkinter as ctk
@@ -18,6 +19,7 @@ from gui.theme import (
     FONT_MONO,
 )
 from gui.presets_data import GAME_PRESETS
+from gui.anim import PulseDotController
 
 class OverviewView(ctk.CTkFrame):
     def __init__(self, parent, client, on_create_requested, on_join_requested, copy_helper):
@@ -26,6 +28,7 @@ class OverviewView(ctk.CTkFrame):
         self.on_create_requested = on_create_requested
         self.on_join_requested = on_join_requested
         self.copy_helper = copy_helper
+        self.active_pulses = []
 
         self._setup_ui()
 
@@ -129,10 +132,10 @@ class OverviewView(ctk.CTkFrame):
         self.code_btn.pack(side="left", padx=12)
 
         # Direct Connect String Block
-        connect_box = ctk.CTkFrame(self.active_frame, fg_color="#18181c", corner_radius=8, border_width=1, border_color=BENTO_BORDER)
-        connect_box.pack(fill="x", pady=(0, 12))
+        self.connect_box = ctk.CTkFrame(self.active_frame, fg_color="#18181c", corner_radius=8, border_width=1, border_color=BENTO_BORDER)
+        self.connect_box.pack(fill="x", pady=(0, 12))
 
-        cb_pad = ctk.CTkFrame(connect_box, fg_color="transparent")
+        cb_pad = ctk.CTkFrame(self.connect_box, fg_color="transparent")
         cb_pad.pack(fill="x", padx=12, pady=8)
 
         self.direct_lbl = ctk.CTkLabel(cb_pad, text="Адрес хоста в игре:  10.42.0.1:25565", font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"), text_color=TEXT_MAIN)
@@ -202,7 +205,15 @@ class OverviewView(ctk.CTkFrame):
         ctk.CTkLabel(t2_pad, text="ЗАДЕРЖКА СЕТИ (RTT)", font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"), text_color=TEXT_MUTED).pack(anchor="w")
         self.ping_val = ctk.CTkLabel(t2_pad, text="< 1 ms", font=ctk.CTkFont(family=FONT_MONO, size=22, weight="bold"), text_color=ACCENT_GREEN)
         self.ping_val.pack(anchor="w", pady=(2, 2))
-        ctk.CTkLabel(t2_pad, text="● Прямой P2P туннель активен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(anchor="w")
+
+        p2p_row = ctk.CTkFrame(t2_pad, fg_color="transparent")
+        p2p_row.pack(anchor="w")
+
+        self.p2p_dot = ctk.CTkLabel(p2p_row, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN)
+        self.p2p_dot.pack(side="left", padx=(0, 4))
+
+        ctk.CTkLabel(p2p_row, text="Прямой P2P туннель активен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(side="left")
+        self.p2p_pulse = PulseDotController(self.p2p_dot, color_on=ACCENT_GREEN, color_off="#093818", interval_ms=80)
 
         # Tile 3: NAT Display
         t3 = ctk.CTkFrame(right_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
@@ -221,6 +232,10 @@ class OverviewView(ctk.CTkFrame):
             self.copy_helper(self.ip_btn, "Копировать IP", val)
 
     def update_state(self, room, you):
+        for p in self.active_pulses:
+            p.stop()
+        self.active_pulses.clear()
+
         if not room:
             self.active_frame.pack_forget()
             self.standby_frame.pack(fill="both", expand=True)
@@ -266,7 +281,12 @@ class OverviewView(ctk.CTkFrame):
             pr_pad = ctk.CTkFrame(p_row, fg_color="transparent")
             pr_pad.pack(fill="x", padx=10, pady=6)
 
-            ctk.CTkLabel(pr_pad, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN).pack(side="left", padx=(0, 6))
+            dot_lbl = ctk.CTkLabel(pr_pad, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN)
+            dot_lbl.pack(side="left", padx=(0, 6))
+
+            # Pulse dot for each online peer
+            pulse = PulseDotController(dot_lbl, color_on=ACCENT_GREEN, color_off="#0f5128", interval_ms=75)
+            self.active_pulses.append(pulse)
 
             nick_txt = peer.get("nick", "User")
             if peer.get("isHost"):

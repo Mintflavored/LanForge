@@ -1,5 +1,5 @@
 """
-Top Navigation Component for LANForge (Tabs, Logo, Quick Actions)
+Top Navigation Component for LANForge (Tabs, Logo, Quick Actions, Pulsing Dot)
 """
 
 import customtkinter as ctk
@@ -14,6 +14,7 @@ from gui.theme import (
     ACCENT_ORANGE_HOVER,
     FONT_SANS,
 )
+from gui.anim import PulseDotController
 
 class TopNavBar(ctk.CTkFrame):
     def __init__(self, parent, on_tab_selected, on_create_clicked, on_join_clicked):
@@ -41,10 +42,13 @@ class TopNavBar(ctk.CTkFrame):
         dot_lbl = ctk.CTkLabel(
             brand_frame,
             text=".",
-            font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"),
+            font=ctk.CTkFont(family=FONT_SANS, size=20, weight="bold"),
             text_color=ACCENT_ORANGE
         )
         dot_lbl.pack(side="left")
+
+        # Start breathing pulse on brand dot
+        self.pulse_ctrl = PulseDotController(dot_lbl, color_on=ACCENT_ORANGE, color_off="#662200", interval_ms=70)
 
         # Tab Selector Pills
         self.tabs_bar = ctk.CTkFrame(self, fg_color=BENTO_CARD, corner_radius=8, border_width=1, border_color=BENTO_BORDER)

@@ -1,5 +1,5 @@
 """
-LANForge Desktop Application Entrypoint (Coordinator Pattern)
+LANForge Desktop Application Entrypoint (Coordinator Pattern with Micro-Animations)
 """
 
 import os
@@ -17,6 +17,7 @@ for p in (cur_dir, root_dir):
 from gui.theme import BG_COLOR
 from gui.events import NetworkEvents
 from gui.network_client import NetworkClient
+from gui.anim import ToastNotification
 from gui.components import TopNavBar, CreateRoomDialog, JoinRoomDialog
 from gui.views import OverviewView, GamesView, RadarView, ChatView, DiagView
 
@@ -36,6 +37,8 @@ class LANForgeApp(ctk.CTk):
         self.client = NetworkClient(server_url="ws://localhost:8787", nick=self.nick)
 
         self.active_tab = "overview"
+        self.known_peer_ids = set()
+
         self._setup_layout()
         self._bind_client_events()
         self._show_tab("overview")
@@ -92,6 +95,13 @@ class LANForgeApp(ctk.CTk):
             else:
                 view.pack_forget()
 
+    def show_toast(self, text, toast_type="orange"):
+        """Displays floating animated toast notification."""
+        try:
+            ToastNotification(self, text=text, toast_type=toast_type)
+        except Exception:
+            pass
+
     def _open_create_dialog(self, default_preset=None):
         CreateRoomDialog(self, client=self.client, default_preset=default_preset)
 
@@ -104,6 +114,7 @@ class LANForgeApp(ctk.CTk):
             self.clipboard_append(text_to_copy)
             self.update()
             button.configure(text="✓ Скопировано")
+            self.show_toast(f"Скопировано: {text_to_copy}", toast_type="green")
             self.after(1200, lambda: button.configure(text=original_text))
         except Exception:
             pass
@@ -111,6 +122,16 @@ class LANForgeApp(ctk.CTk):
     def _bind_client_events(self):
         def on_room(room):
             try:
+                if room:
+                    current_peer_ids = {p["id"] for p in room.get("peers", [])}
+                    new_peers = [p for p in room.get("peers", []) if p["id"] not in self.known_peer_ids and (not self.client.you or p["id"] != self.client.you.get("id"))]
+                    if new_peers and len(self.known_peer_ids) > 0:
+                        for np in new_peers:
+                            self.show_toast(f"Игрок {np.get('nick')} подключился к сети", toast_type="green")
+                    self.known_peer_ids = current_peer_ids
+                else:
+                    self.known_peer_ids.clear()
+
                 self.after(0, lambda: self.views["overview"].update_state(room, self.client.you))
                 if not room:
                     self.after(0, self.views["chat"].reset_chat)
@@ -126,12 +147,15 @@ class LANForgeApp(ctk.CTk):
         def on_chat(msg):
             try:
                 self.after(0, lambda: self.views["chat"].append_message(msg))
+                if self.active_tab != "chat":
+                    self.show_toast(f"{msg.get('fromNick')}: {msg.get('text')}", toast_type="orange")
             except Exception:
                 pass
 
         def on_game(game):
             try:
                 self.after(0, self.views["radar"].update_radar)
+                self.show_toast(f"Обнаружен LAN-мир: {game.get('name')}", toast_type="green")
             except Exception:
                 pass
 
