@@ -1,6 +1,6 @@
 """
 LANForge UI Micro-Animation Engine
-Smooth, low-CPU interpolation helpers, pulsing lights, and floating toast notifications.
+Smooth, low-CPU interpolation helpers, pulsing lights, floating toasts, and view transitions.
 """
 
 import math
@@ -23,9 +23,42 @@ def lerp_color(color_a, color_b, t):
     return rgb_to_hex((r, g, b))
 
 
+def animate_view_reveal(container, current_view, next_view, on_complete=None):
+    """
+    Subtle, silky 90ms vertical slide-up reveal transition (Raycast / Linear style).
+    Moves incoming view from y=+14px to y=0px with cubic ease-out.
+    """
+    if current_view and current_view != next_view:
+        current_view.place_forget()
+
+    start_offset_y = 12
+    total_steps = 6
+    step_duration_ms = 14  # ~85ms total transition
+
+    next_view.place(relx=0, y=start_offset_y, relwidth=1, relheight=1)
+
+    def _step(step_idx):
+        if not next_view.winfo_exists():
+            return
+
+        if step_idx <= total_steps:
+            t = step_idx / total_steps
+            # Ease-out cubic: 1 - (1-t)^3
+            ease = 1 - math.pow(1 - t, 3)
+            current_y = int(start_offset_y * (1.0 - ease))
+            next_view.place_configure(y=current_y)
+            container.after(step_duration_ms, lambda: _step(step_idx + 1))
+        else:
+            next_view.place(relx=0, rely=0, relwidth=1, relheight=1)
+            if on_complete:
+                on_complete()
+
+    _step(1)
+
+
 class ToastNotification(ctk.CTkFrame):
     """Sleek floating brutalist toast notification that slides in from top."""
-    def __init__(self, parent, text="Уведомление", toast_type="info", duration_ms=2500):
+    def __init__(self, parent, text="Уведомление", toast_type="info", duration_ms=2200):
         accent_col = "#ff5500" if toast_type == "orange" else ("#22c55e" if toast_type == "green" else "#3b82f6")
         
         super().__init__(
@@ -38,7 +71,7 @@ class ToastNotification(ctk.CTkFrame):
         self.parent = parent
         self.duration_ms = duration_ms
         self.step = 0
-        self.total_steps = 8
+        self.total_steps = 7
         self.current_y = -50
         self.target_y = 14
 
@@ -60,19 +93,17 @@ class ToastNotification(ctk.CTkFrame):
             text_color="#ffffff"
         ).pack(side="left")
 
-        # Start Slide-In Animation
         self.place(relx=0.5, y=self.current_y, anchor="n")
         self._slide_in()
 
     def _slide_in(self):
         if self.step <= self.total_steps:
             t = self.step / self.total_steps
-            # Ease-out cubic: 1 - (1-t)^3
             ease = 1 - math.pow(1 - t, 3)
             y = self.current_y + (self.target_y - self.current_y) * ease
             self.place_configure(y=y)
             self.step += 1
-            self.after(20, self._slide_in)
+            self.after(16, self._slide_in)
         else:
             self.after(self.duration_ms, self._slide_out)
 
@@ -87,7 +118,7 @@ class ToastNotification(ctk.CTkFrame):
             y = self.target_y - (60 * ease)
             self.place_configure(y=y)
             self.step += 1
-            self.after(20, self._animate_out)
+            self.after(16, self._animate_out)
         else:
             self.destroy()
 
@@ -107,7 +138,6 @@ class PulseDotController:
         if not self.running or not self.widget.winfo_exists():
             return
 
-        # Sinusoidal brightness wave
         factor = (math.sin(self.t) + 1.0) / 2.0
         current_color = lerp_color(self.color_off, self.color_on, factor)
         try:
@@ -126,7 +156,7 @@ class RadarScannerAnimation:
     """Animated radar sweep status and scanning frames."""
     SCAN_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-    def __init__(self, label_widget, base_text="Сканирование сети активна"):
+    def __init__(self, label_widget, base_text="Сканирование сети активно"):
         self.label_widget = label_widget
         self.base_text = base_text
         self.idx = 0
@@ -144,7 +174,7 @@ class RadarScannerAnimation:
             return
 
         self.idx += 1
-        self.label_widget.after(100, self._tick)
+        self.label_widget.after(90, self._tick)
 
     def stop(self):
         self.running = False

@@ -1,5 +1,5 @@
 """
-LANForge Desktop Application Entrypoint (Coordinator Pattern with Micro-Animations)
+LANForge Desktop Application Entrypoint (Coordinator Pattern with Animated Transitions)
 """
 
 import os
@@ -17,7 +17,7 @@ for p in (cur_dir, root_dir):
 from gui.theme import BG_COLOR
 from gui.events import NetworkEvents
 from gui.network_client import NetworkClient
-from gui.anim import ToastNotification
+from gui.anim import ToastNotification, animate_view_reveal
 from gui.components import TopNavBar, CreateRoomDialog, JoinRoomDialog
 from gui.views import OverviewView, GamesView, RadarView, ChatView, DiagView
 
@@ -36,12 +36,13 @@ class LANForgeApp(ctk.CTk):
         self.nick = f"User_{int(time.time()) % 1000}"
         self.client = NetworkClient(server_url="ws://localhost:8787", nick=self.nick)
 
-        self.active_tab = "overview"
+        self.active_tab = None
+        self.current_active_view = None
         self.known_peer_ids = set()
 
         self._setup_layout()
         self._bind_client_events()
-        self._show_tab("overview")
+        self._show_tab("overview", animate=False)
 
     def _setup_layout(self):
         self.grid_columnconfigure(0, weight=1)
@@ -85,15 +86,25 @@ class LANForgeApp(ctk.CTk):
             "diag": DiagView(self.main_container),
         }
 
-    def _show_tab(self, tab_id):
+    def _show_tab(self, tab_id, animate=True):
+        if self.active_tab == tab_id and self.current_active_view:
+            return
+
+        prev_view = self.current_active_view
+        next_view = self.views.get(tab_id)
+        if not next_view:
+            return
+
         self.active_tab = tab_id
+        self.current_active_view = next_view
         self.nav_bar.set_active_tab(tab_id)
 
-        for name, view in self.views.items():
-            if name == tab_id:
-                view.pack(fill="both", expand=True)
-            else:
-                view.pack_forget()
+        if animate and prev_view:
+            animate_view_reveal(self.main_container, prev_view, next_view)
+        else:
+            if prev_view:
+                prev_view.place_forget()
+            next_view.place(relx=0, rely=0, relwidth=1, relheight=1)
 
     def show_toast(self, text, toast_type="orange"):
         """Displays floating animated toast notification."""
