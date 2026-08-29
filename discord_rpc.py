@@ -11,7 +11,7 @@ import time
 import uuid
 import threading
 
-DISCORD_CLIENT_ID = "1212891928472918273"
+DISCORD_CLIENT_ID = "1543141438970396702"
 
 class DiscordRPC:
     def __init__(self, client_id=DISCORD_CLIENT_ID):
@@ -86,7 +86,7 @@ class DiscordRPC:
                 "state": state,
                 "timestamps": {"start": self.start_time},
                 "assets": {
-                    "large_image": "lanforge_logo",
+                    "large_image": "app_icon",
                     "large_text": "LANForge — P2P Virtual LAN"
                 }
             }
@@ -112,7 +112,14 @@ class DiscordRPC:
             if not self.connected:
                 if self._connect():
                     if self.last_activity:
-                        self.set_activity()
+                        self._send(1, {
+                            "cmd": "SET_ACTIVITY",
+                            "args": {
+                                "pid": os.getpid(),
+                                "activity": self.last_activity
+                            },
+                            "nonce": str(uuid.uuid4())
+                        })
             time.sleep(3.0)
 
     def close(self):
