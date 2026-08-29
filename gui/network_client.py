@@ -35,8 +35,8 @@ class NetworkClient:
         if event in self.callbacks:
             try:
                 self.callbacks[event](data)
-            except Exception as e:
-                print(f"[Client Callback Error] {event}: {e}")
+            except Exception:
+                pass
 
     def _run_async_loop(self):
         self.loop = asyncio.new_event_loop()
@@ -50,7 +50,6 @@ class NetworkClient:
                     self.ws = ws
                     self.connected = True
                     self._emit("connection", True)
-                    print(f"[LANForge GUI Client] Connected to {self.server_url}")
 
                     # Start ping loop
                     ping_task = asyncio.create_task(self._ping_loop())
@@ -61,7 +60,7 @@ class NetworkClient:
                             self._handle_server_message(data)
                     finally:
                         ping_task.cancel()
-            except Exception as e:
+            except Exception:
                 self.connected = False
                 self.ws = None
                 self._emit("connection", False)

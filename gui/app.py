@@ -1,9 +1,23 @@
+import os
+import sys
+
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(cur_dir)
+for p in (cur_dir, root_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
 import time
-from gui.presets_data import GAME_PRESETS
-from gui.network_client import NetworkClient
+
+try:
+    from presets_data import GAME_PRESETS
+    from network_client import NetworkClient
+except ImportError:
+    from gui.presets_data import GAME_PRESETS
+    from gui.network_client import NetworkClient
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -651,22 +665,37 @@ class LANForgeApp(ctk.CTk):
 
     def _bind_client_events(self):
         def on_conn(status):
-            self.after(0, lambda: self.status_indicator.configure(
-                text="● Online" if status else "○ Offline",
-                text_color="#10b981" if status else "#ef4444"
-            ))
+            try:
+                self.after(0, lambda: self.status_indicator.configure(
+                    text="● Online" if status else "○ Offline",
+                    text_color="#10b981" if status else "#ef4444"
+                ))
+            except Exception:
+                pass
 
         def on_room(room):
-            self.after(0, lambda: self._show_tab("lobby"))
+            try:
+                self.after(0, lambda: self._show_tab("lobby"))
+            except Exception:
+                pass
 
         def on_ping(rtt):
-            self.after(0, lambda: self.ping_label.configure(text=f"Ping: {rtt} ms"))
+            try:
+                self.after(0, lambda: self.ping_label.configure(text=f"Ping: {rtt} ms"))
+            except Exception:
+                pass
 
         def on_chat(msg):
-            self.after(0, lambda: self._show_tab("chat") if self.active_tab == "chat" else None)
+            try:
+                self.after(0, lambda: self._show_tab("chat") if self.active_tab == "chat" else None)
+            except Exception:
+                pass
 
         def on_game(game):
-            self.after(0, lambda: self._show_tab("radar") if self.active_tab == "radar" else None)
+            try:
+                self.after(0, lambda: self._show_tab("radar") if self.active_tab == "radar" else None)
+            except Exception:
+                pass
 
         self.client.on("connection", on_conn)
         self.client.on("room_state", on_room)
