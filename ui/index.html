@@ -998,8 +998,8 @@
 
       <label class="card-title-badge">СИГНАЛИНГ СЕРВЕР СЕТИ (P2P ХАБ)</label>
       <select class="input-field" id="settings-server-mode" onchange="onServerModeChange()">
-        <option value="local">💻 Локальный / Встроенный (127.0.0.1:8787)</option>
-        <option value="cloud">🌐 Глобальный облачный сервер (По умолчанию)</option>
+        <option value="local">💻 Встроенный локальный сервер (127.0.0.1:8787) [Рекомендуется]</option>
+        <option value="cloud">🌐 Публичный облачный сервер (Render.com)</option>
         <option value="custom">🛠️ Пользовательский сервер (Свой VPS / IP)</option>
       </select>
 
@@ -1095,6 +1095,21 @@
     });
 
     // WEBSOCKET CLIENT
+    let connectionAttempts = 0;
+
+    function updateConnectionStatus(isOnline) {
+      const pill = document.getElementById("telemetry-status-pill");
+      if (pill) {
+        if (isOnline) {
+          pill.className = "p2p-badge p2p-badge-direct";
+          pill.textContent = "ONLINE (P2P)";
+        } else {
+          pill.className = "p2p-badge p2p-badge-relay";
+          pill.textContent = "OFFLINE";
+        }
+      }
+    }
+
     function connectWebSocket(url = currentServerUrl) {
       if (ws) {
         try { ws.close(); } catch(e) {}
@@ -1108,13 +1123,16 @@
         ws = new WebSocket(currentServerUrl);
       } catch (err) {
         console.error("[WS] Connection creation failed:", err);
+        updateConnectionStatus(false);
         return;
       }
 
       ws.onopen = () => {
+        connectionAttempts = 0;
         console.log("[WS] Connected to Signaling Engine");
         startPingHeartbeat();
-        showToast("Подключено к хабу сети");
+        updateConnectionStatus(true);
+        showToast("Подключено к серверу сети");
       };
 
       ws.onmessage = (event) => {
@@ -1126,9 +1144,27 @@
         }
       };
 
+      ws.onerror = (err) => {
+        console.warn("[WS] Connection error:", err);
+      };
+
       ws.onclose = () => {
-        console.log("[WS] Disconnected, reconnecting in 2s...");
+        updateConnectionStatus(false);
+        connectionAttempts++;
         if (pingTimer) clearInterval(pingTimer);
+
+        // If remote/cloud failed repeatedly, automatically fallback to local embedded server
+        if (connectionAttempts >= 2 && currentServerUrl !== "ws://127.0.0.1:8787" && currentServerMode !== "custom") {
+          console.warn("[WS] Falling back to local backend ws://127.0.0.1:8787");
+          currentServerUrl = "ws://127.0.0.1:8787";
+          currentServerMode = "local";
+          localStorage.setItem("lanforge_server_mode", "local");
+          localStorage.setItem("lanforge_server_url", "ws://127.0.0.1:8787");
+          showToast("Переключение на локальный сервер...");
+          setTimeout(() => connectWebSocket("ws://127.0.0.1:8787"), 500);
+          return;
+        }
+
         setTimeout(() => connectWebSocket(currentServerUrl), 2000);
       };
     }
@@ -1136,6 +1172,11 @@
     function sendWS(payload) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(payload));
+        return true;
+      } else {
+        showToast("⚠️ Нет связи с сервером! Подключение...");
+        connectWebSocket("ws://127.0.0.1:8787");
+        return false;
       }
     }
 
@@ -1711,12 +1752,15 @@
 
     // ACTIONS & MODALS
     function openCreateModal(presetId = null) {
-      if (presetId) {
-        document.getElementById("create-game-preset").value = presetId;
+      if (typeof presetId === "string" && presetId) {
+        const select = document.getElementById("create-game-preset");
+        if (select) select.value = presetId;
         const p = GAME_PRESETS.find(x => x.id === presetId);
         if (p) {
           document.getElementById("create-room-name").value = "Сервер " + p.name;
         }
+      } else {
+        document.getElementById("create-room-name").value = "Сервер друзей";
       }
       document.getElementById("create-modal").classList.add("active");
       setTimeout(() => document.getElementById("create-room-name").focus(), 50);
@@ -1784,33 +1828,47 @@
     }
 
     function submitCreateRoom() {
-      const name = document.getElementById("create-room-name").value.trim() || "Комната";
-      const preset = document.getElementById("create-game-preset").value;
-      const password = document.getElementById("create-room-pass").value;
+      const nameInput = document.getElementById("create-room-name");
+      const name = (nameInput && nameInput.value ? nameInput.value.trim() : "") || "Сервер друзей";
+      const presetSelect = document.getElementById("create-game-preset");
+      const preset = (presetSelect && presetSelect.value) ? presetSelect.value : "minecraft_java";
+      const passInput = document.getElementById("create-room-pass");
+      const password = passInput ? passInput.value : "";
 
-      sendWS({
+      const sent = sendWS({
         type: "create_room",
         name: name,
         gamePreset: preset,
         password: password,
-        hostNick: myNick,
+        hostNick: myNick || "Player",
         maxPeers: 16
       });
-      closeModals();
+
+      if (sent) {
+        closeModals();
+      }
     }
 
     function submitJoinRoom() {
-      const code = document.getElementById("join-room-code").value.trim().toUpperCase();
-      const password = document.getElementById("join-room-pass").value;
-      if (!code) return;
+      const codeInput = document.getElementById("join-room-code");
+      const code = (codeInput && codeInput.value ? codeInput.value.trim().toUpperCase() : "");
+      if (!code) {
+        showToast("⚠️ Введите код комнаты");
+        return;
+      }
+      const passInput = document.getElementById("join-room-pass");
+      const password = passInput ? passInput.value : "";
 
-      sendWS({
+      const sent = sendWS({
         type: "join_room",
         code: code,
-        nick: myNick,
+        nick: myNick || "Player",
         password: password
       });
-      closeModals();
+
+      if (sent) {
+        closeModals();
+      }
     }
 
     function leaveRoom() {
