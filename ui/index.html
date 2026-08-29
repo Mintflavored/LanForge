@@ -620,7 +620,7 @@
         <circle cx="12" cy="12" r="2.2" fill="#ff5500"/>
       </svg>
       <span class="brand-text">LANFORGE<span class="brand-dot">.</span></span>
-      <span class="version-tag">v1.4.0</span>
+      <span class="version-tag">v1.5.0</span>
       <span class="brand-sub">by <span class="nervs-red">NERVS</span></span>
     </div>
 
@@ -633,6 +633,7 @@
     </nav>
 
     <div class="nav-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-sound-toggle" title="Звуковые сигналы" onclick="toggleSound()">🔊</button>
       <button class="btn btn-primary" onclick="openCreateModal()">+ Создать сеть</button>
       <button class="btn btn-secondary" onclick="openJoinModal()">Войти по коду</button>
     </div>
@@ -993,6 +994,117 @@
       }, 2000);
     }
 
+    // TACTICAL AUDIO SYNTHESIZER (Web Audio API)
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn("[Audio] Web Audio not available", e);
+        }
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById("btn-sound-toggle");
+      if (btn) {
+        btn.innerText = soundEnabled ? "🔊" : "🔇";
+        btn.style.opacity = soundEnabled ? "1" : "0.5";
+      }
+      showToast(soundEnabled ? "Звуковые сигналы включены" : "Звуковые сигналы отключены");
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'join') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12); // E5
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'leave') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, now); // A4
+          osc.frequency.exponentialRampToValueAtTime(349.23, now + 0.14); // F4
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.start(now);
+          osc.stop(now + 0.22);
+        } else if (type === 'chat') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(880, now); // A5
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'create') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        }
+      } catch (err) {
+        console.warn("[Audio Play Error]", err);
+      }
+    }
+
+    // NATIVE WINDOWS BRIDGES (Discord RPC & System Tray)
+    function notifyNative(title, msg) {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.show_notification) {
+        window.pywebview.api.show_notification(title, msg);
+      }
+    }
+
+    function syncNativePresence() {
+      if (window.pywebview && window.pywebview.api) {
+        if (currentRoom) {
+          const peersCount = (currentRoom.peers ? currentRoom.peers.length : 1);
+          const preset = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset) || GAME_PRESETS[0];
+          if (window.pywebview.api.update_presence) {
+            window.pywebview.api.update_presence(
+              `В сети: ${currentRoom.name} [${currentRoom.code}]`,
+              `Игра: ${preset.name}`,
+              peersCount,
+              currentRoom.maxPeers || 16,
+              currentRoom.code
+            );
+          }
+          if (window.pywebview.api.update_tray) {
+            window.pywebview.api.update_tray(`В сети (${currentRoom.name})`, myVirtualIp);
+          }
+        } else {
+          if (window.pywebview.api.update_presence) {
+            window.pywebview.api.update_presence("В главном меню", "P2P Virtual Gaming Hub v1.5.0");
+          }
+          if (window.pywebview.api.update_tray) {
+            window.pywebview.api.update_tray("Вне сети", "10.42.0.1");
+          }
+        }
+      }
+    }
+
     // SERVER MESSAGE DISPATCHER
     function handleServerMessage(msg) {
       switch (msg.type) {
@@ -1006,7 +1118,10 @@
           }
           updateRoomUI();
           switchTab("overview");
+          playSound(msg.type === "room_created" ? "create" : "join");
+          syncNativePresence();
           showToast(msg.type === "room_created" ? "Комната создана!" : "Подключено к комнате!");
+          notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы подключились к комнате");
           break;
 
         case "peer_joined":
@@ -1015,7 +1130,10 @@
             currentRoom.peers = currentRoom.peers.filter(p => p.id !== msg.peer.id);
             currentRoom.peers.push(msg.peer);
             updateRoomUI();
+            playSound("join");
+            syncNativePresence();
             showToast(`Игрок ${msg.peer.nick} подключился`);
+            notifyNative("LANForge", `Игрок ${msg.peer.nick} подключился`);
           }
           break;
 
@@ -1025,6 +1143,8 @@
               currentRoom.peers = currentRoom.peers.filter(p => p.id !== msg.peerId);
             }
             updateRoomUI();
+            playSound("leave");
+            syncNativePresence();
             showToast("Игрок отключился");
           }
           break;
@@ -1039,6 +1159,7 @@
               if (idx >= 0) currentRoom.peers[idx] = msg.peer;
             }
             updateRoomUI();
+            syncNativePresence();
           }
           break;
 
@@ -1046,8 +1167,11 @@
           if (currentRoom) {
             currentRoom.hostId = msg.newHostId;
             updateRoomUI();
+            syncNativePresence();
             if (msg.newHostId === myId) {
+              playSound("create");
               showToast("Вы назначены хостом комнаты!");
+              notifyNative("LANForge", "Вы назначены хостом комнаты");
             }
           }
           break;
@@ -1055,6 +1179,10 @@
         case "chat_broadcast":
           if (msg.message) {
             appendChatMessage(msg.message);
+            if (msg.message.fromPeerId !== myId) {
+              playSound("chat");
+              notifyNative("Чат: " + msg.message.fromNick, msg.message.text);
+            }
           }
           break;
 
@@ -1073,7 +1201,9 @@
 
         case "discovered_game":
           if (msg.game) {
+            playSound("create");
             showToast("Обнаружен LAN-мир: " + msg.game.name);
+            notifyNative("LAN Радар", "Обнаружен мир: " + msg.game.name);
           }
           break;
 
@@ -1425,6 +1555,8 @@
       currentRoom = null;
       document.getElementById("chat-messages-container").innerHTML = "";
       updateRoomUI();
+      playSound("leave");
+      syncNativePresence();
       showToast("Вы вышли из комнаты");
     }
 

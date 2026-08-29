@@ -1,10 +1,12 @@
 """
-LANForge Desktop Launcher (GPU-Accelerated & Proxy/VPN Resilient)
-DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe.
-Auto-manages Go backend server lifecycle with zero orphaned processes.
+LANForge Desktop Launcher (v1.5.0)
+- Discord Rich Presence (RPC) Integration
+- Windows System Tray & Native Toast Notifications
+- DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
+- Auto-manages Go backend server lifecycle with zero orphaned processes
 """
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 import os
 import sys
@@ -12,6 +14,7 @@ import time
 import socket
 import subprocess
 import atexit
+import threading
 
 # Ensure local loopback connections completely bypass system proxies & Clash Verge
 PROXY_BYPASS = "localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12,*.local,10.42.*"
@@ -29,19 +32,27 @@ os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
 )
 
 import webview
+from discord_rpc import discord
+from tray_manager import TrayManager
 
 # Determine root directory (both in development and PyInstaller bundled mode)
 if getattr(sys, 'frozen', False):
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
     base_dir = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() == "bin" else exe_dir
     html_path = os.path.join(base_dir, "ui", "index.html")
+    icon_path = os.path.join(base_dir, "app_icon.png")
     if not os.path.exists(html_path):
         html_path = os.path.join(sys._MEIPASS, "ui", "index.html")
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(sys._MEIPASS, "app_icon.png")
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     html_path = os.path.join(base_dir, "ui", "index.html")
+    icon_path = os.path.join(base_dir, "app_icon.png")
 
 server_proc = None
+main_window = None
+tray = None
 
 def is_port_open(host="127.0.0.1", port=8787):
     try:
@@ -66,7 +77,6 @@ def start_backend_server():
             [server_bin, "-port", "8787"],
             creationflags=creation_flags
         )
-        # Wait up to 1.5s for port to become active
         for _ in range(15):
             time.sleep(0.1)
             if is_port_open("127.0.0.1", 8787):
@@ -87,19 +97,84 @@ def stop_backend_server():
 
 atexit.register(stop_backend_server)
 
+class JsApi:
+    """JS Bridge allowing UI to interact with Windows Native features."""
+
+    def update_presence(self, details, state, party_size=None, party_max=16, room_code=None):
+        try:
+            discord.set_activity(
+                details=details,
+                state=state,
+                party_size=party_size,
+                party_max=party_max,
+                room_code=room_code
+            )
+        except Exception as e:
+            print(f"[Discord RPC Error] {e}")
+
+    def update_tray(self, status_text, my_ip):
+        if tray:
+            tray.update_status(status_text, my_ip)
+
+    def show_notification(self, title, message):
+        if tray:
+            tray.notify(title, message)
+
+def on_show_window():
+    global main_window
+    if main_window:
+        try:
+            main_window.show()
+            main_window.restore()
+        except Exception:
+            pass
+
+def on_quit_app():
+    global main_window
+    stop_backend_server()
+    if main_window:
+        try:
+            main_window.destroy()
+        except Exception:
+            pass
+    sys.exit(0)
+
 def main():
+    global main_window, tray
+
     start_backend_server()
 
-    window = webview.create_window(
+    # Initialize Windows System Tray
+    tray = TrayManager(
+        icon_path=icon_path,
+        app_name="LANForge",
+        on_show=on_show_window,
+        on_quit=on_quit_app
+    )
+    tray.start()
+
+    # Initial Discord RPC Status
+    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.5.0")
+
+    api = JsApi()
+
+    main_window = webview.create_window(
         title="LANForge",
         url=html_path,
+        js_api=api,
         width=980,
         height=640,
         min_size=(860, 540),
         background_color="#09090b",
         easy_drag=False
     )
-    window.events.closed += stop_backend_server
+
+    def on_closed():
+        if tray:
+            tray.stop()
+        stop_backend_server()
+
+    main_window.events.closed += on_closed
 
     webview.start(gui="edgechromium", debug=False)
 
