@@ -176,7 +176,7 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password string)
 	room.Peers[peer.ID] = peer
 	room.Mu.Unlock()
 
-	// Broadcast join event
+	// Broadcast join event outside of mutex lock
 	room.Broadcast(protocol.ServerMessage{
 		Type: "peer_joined",
 		Peer: &peer.State,
@@ -205,6 +205,20 @@ func (m *RoomManager) LeaveRoom(peer *ConnectedPeer) {
 	room.ReleaseVirtualIPLocked(peer.State.VirtualIP)
 	wasHost := peer.State.IsHost
 	remainingCount := len(room.Peers)
+
+	var nextHost *ConnectedPeer
+	if wasHost && remainingCount > 0 {
+		for _, p := range room.Peers {
+			nextHost = p
+			nextHost.State.IsHost = true
+			room.HostID = nextHost.ID
+			// Promote new host to 10.42.0.1
+			room.ReleaseVirtualIPLocked(nextHost.State.VirtualIP)
+			nextHost.State.VirtualIP = "10.42.0.1"
+			room.AssignedIPs[1] = true
+			break
+		}
+	}
 	room.Mu.Unlock()
 
 	peer.RoomCode = ""
@@ -216,29 +230,22 @@ func (m *RoomManager) LeaveRoom(peer *ConnectedPeer) {
 		delete(m.rooms, room.Code)
 		m.mu.Unlock()
 	} else {
+		// Broadcast outside of mutex lock (prevents deadlock)
 		room.Broadcast(protocol.ServerMessage{
 			Type:   "peer_left",
 			PeerID: peer.ID,
 			Reason: "left",
 		}, "")
 
-		// Host migration
-		if wasHost {
-			room.Mu.Lock()
-			for _, nextHost := range room.Peers {
-				nextHost.State.IsHost = true
-				room.HostID = nextHost.ID
-				room.Broadcast(protocol.ServerMessage{
-					Type:      "host_transferred",
-					NewHostID: nextHost.ID,
-				}, "")
-				room.Broadcast(protocol.ServerMessage{
-					Type: "peer_updated",
-					Peer: &nextHost.State,
-				}, "")
-				break
-			}
-			room.Mu.Unlock()
+		if nextHost != nil {
+			room.Broadcast(protocol.ServerMessage{
+				Type:      "host_transferred",
+				NewHostID: nextHost.ID,
+			}, "")
+			room.Broadcast(protocol.ServerMessage{
+				Type: "peer_updated",
+				Peer: &nextHost.State,
+			}, "")
 		}
 	}
 }

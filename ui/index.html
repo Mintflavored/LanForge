@@ -639,15 +639,15 @@
   </main>
 
   <!-- CREATE ROOM MODAL -->
-  <div class="modal-overlay" id="create-modal">
+  <div class="modal-overlay" id="create-modal" onclick="onOverlayClick(event, 'create-modal')">
     <div class="modal-box">
       <h3 style="font-size: 16px; margin-bottom: 16px;">Создать виртуальную комнату</h3>
       <label class="card-title-badge">НАЗВАНИЕ КОМНАТЫ</label>
-      <input type="text" class="input-field" id="create-room-name" value="Сервер друзей">
+      <input type="text" class="input-field" id="create-room-name" value="Сервер друзей" onkeydown="if(event.key==='Enter') submitCreateRoom()">
       <label class="card-title-badge">ИГРОВОЙ ПРЕСЕТ</label>
       <select class="input-field" id="create-game-preset"></select>
       <label class="card-title-badge">ПАРОЛЬ (НЕОБЯЗАТЕЛЬНО)</label>
-      <input type="password" class="input-field" id="create-room-pass" placeholder="Оставьте пустым для открытого входа">
+      <input type="password" class="input-field" id="create-room-pass" placeholder="Оставьте пустым для открытого входа" onkeydown="if(event.key==='Enter') submitCreateRoom()">
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
         <button class="btn btn-primary" onclick="submitCreateRoom()">Создать комнату</button>
@@ -656,13 +656,13 @@
   </div>
 
   <!-- JOIN ROOM MODAL -->
-  <div class="modal-overlay" id="join-modal">
+  <div class="modal-overlay" id="join-modal" onclick="onOverlayClick(event, 'join-modal')">
     <div class="modal-box">
       <h3 style="font-size: 16px; margin-bottom: 16px;">Войти в комнату по коду</h3>
       <label class="card-title-badge">КОД КОМНАТЫ (6 СИМВОЛОВ)</label>
-      <input type="text" class="input-field" id="join-room-code" placeholder="LAN-XXXX" style="font-family: var(--font-mono); text-transform: uppercase;">
+      <input type="text" class="input-field" id="join-room-code" placeholder="LAN-XXXX" style="font-family: var(--font-mono); text-transform: uppercase;" onkeydown="if(event.key==='Enter') submitJoinRoom()">
       <label class="card-title-badge">ПАРОЛЬ (ЕСЛИ ТРЕБУЕТСЯ)</label>
-      <input type="password" class="input-field" id="join-room-pass">
+      <input type="password" class="input-field" id="join-room-pass" onkeydown="if(event.key==='Enter') submitJoinRoom()">
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
         <button class="btn btn-primary" onclick="submitJoinRoom()">Подключиться</button>
@@ -688,24 +688,31 @@
     ];
 
     let currentRoom = null;
-    let myNick = "User_" + Math.floor(Math.random() * 1000);
+    let myNick = "Player_" + Math.floor(100 + Math.random() * 900);
     let myVirtualIp = "10.42.0.1";
     let myId = "";
     let selectedCategory = "Все";
     let ws = null;
+    let pingTimer = null;
 
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
       renderPresets();
       connectWebSocket();
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModals();
+      });
     });
 
     // WEBSOCKET CLIENT
     function connectWebSocket() {
-      ws = new WebSocket("ws://localhost:8787");
+      // Connect explicitly to strict 127.0.0.1 (bypassing DNS fake-IP proxies)
+      ws = new WebSocket("ws://127.0.0.1:8787");
 
       ws.onopen = () => {
-        console.log("[WS] Connected to Go Backend");
+        console.log("[WS] Connected to Go Signaling Engine");
+        startPingHeartbeat();
       };
 
       ws.onmessage = (event) => {
@@ -718,39 +725,105 @@
       };
 
       ws.onclose = () => {
-        console.log("[WS] Disconnected, reconnecting...");
+        console.log("[WS] Disconnected, reconnecting in 1.5s...");
+        if (pingTimer) clearInterval(pingTimer);
         setTimeout(connectWebSocket, 1500);
       };
     }
 
-    function sendWS(action, data = {}) {
+    function sendWS(payload) {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ action, data }));
+        ws.send(JSON.stringify(payload));
       }
     }
 
+    function startPingHeartbeat() {
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = setInterval(() => {
+        sendWS({ type: "ping", timestamp: Date.now() });
+      }, 2500);
+    }
+
+    // SERVER MESSAGE DISPATCHER
     function handleServerMessage(msg) {
       switch (msg.type) {
-        case "room_state":
+        case "room_created":
+        case "room_joined":
           currentRoom = msg.room;
           if (msg.you) {
             myVirtualIp = msg.you.virtualIp || "10.42.0.1";
             myId = msg.you.id || "";
+            myNick = msg.you.nick || myNick;
           }
           updateRoomUI();
+          switchTab("overview");
+          showToast(msg.type === "room_created" ? "Комната создана!" : "Подключено к комнате!");
           break;
-        case "ping":
-          const pingVal = msg.rtt || 0;
-          document.getElementById("my-ping-lbl").innerText = pingVal > 0 ? pingVal + " ms" : "< 1 ms";
+
+        case "peer_joined":
+          if (currentRoom && msg.peer) {
+            if (!currentRoom.peers) currentRoom.peers = [];
+            currentRoom.peers = currentRoom.peers.filter(p => p.id !== msg.peer.id);
+            currentRoom.peers.push(msg.peer);
+            updateRoomUI();
+            showToast(`Игрок ${msg.peer.nick} подключился`);
+          }
           break;
-        case "chat_message":
-          appendChatMessage(msg.message);
+
+        case "peer_left":
+          if (currentRoom) {
+            if (currentRoom.peers) {
+              currentRoom.peers = currentRoom.peers.filter(p => p.id !== msg.peerId);
+            }
+            updateRoomUI();
+            showToast("Игрок отключился");
+          }
           break;
+
+        case "peer_updated":
+          if (currentRoom && msg.peer) {
+            if (msg.peer.id === myId) {
+              myVirtualIp = msg.peer.virtualIp;
+            }
+            if (currentRoom.peers) {
+              const idx = currentRoom.peers.findIndex(p => p.id === msg.peer.id);
+              if (idx >= 0) currentRoom.peers[idx] = msg.peer;
+            }
+            updateRoomUI();
+          }
+          break;
+
+        case "host_transferred":
+          if (currentRoom) {
+            currentRoom.hostId = msg.newHostId;
+            updateRoomUI();
+            if (msg.newHostId === myId) {
+              showToast("Вы назначены хостом комнаты!");
+            }
+          }
+          break;
+
+        case "chat_broadcast":
+          if (msg.message) {
+            appendChatMessage(msg.message);
+          }
+          break;
+
+        case "pong":
+          if (msg.clientTimestamp) {
+            const rtt = Math.max(1, Date.now() - msg.clientTimestamp);
+            document.getElementById("my-ping-lbl").innerText = rtt + " ms";
+          }
+          break;
+
         case "discovered_game":
-          showToast("Обнаружен LAN-мир: " + msg.game.name);
+          if (msg.game) {
+            showToast("Обнаружен LAN-мир: " + msg.game.name);
+          }
           break;
+
         case "error":
-          alert("Ошибка: " + msg.error);
+          showToast("Ошибка: " + (msg.errorMessage || msg.code || "Неизвестная ошибка"));
           break;
       }
     }
@@ -796,10 +869,10 @@
         card.innerHTML = `
           <div>
             <div style="font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-              ${p.name}
+              ${escapeHtml(p.name)}
               <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);">[${p.protocol}:${p.port}]</span>
             </div>
-            <div style="font-size: 10px; color: #71717a; margin-top: 3px;">${p.hint}</div>
+            <div style="font-size: 10px; color: #71717a; margin-top: 3px;">${escapeHtml(p.hint)}</div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="openCreateModal('${p.id}')">Создать</button>
         `;
@@ -856,7 +929,7 @@
         row.innerHTML = `
           <div style="display: flex; align-items: center;">
             <span class="online-dot"></span>
-            <span style="font-size: 12px; font-weight: 700;">${nickTxt}</span>
+            <span style="font-size: 12px; font-weight: 700;">${escapeHtml(nickTxt)}</span>
             <button class="btn btn-secondary btn-sm" style="margin-left: 10px; font-family: var(--font-mono); font-size: 10px;" onclick="copyText('${peer.virtualIp}')">${peer.virtualIp} 📋</button>
           </div>
           <span style="font-family: var(--font-mono); font-size: 11px; color: ${pCol};">${pStr}</span>
@@ -870,22 +943,22 @@
       const input = document.getElementById("chat-input-field");
       const text = input.value.trim();
       if (!text) return;
-      sendWS("chat_message", { text });
+      sendWS({ type: "chat_message", text: text });
       input.value = "";
     }
 
     function appendChatMessage(msg) {
       const box = document.getElementById("chat-messages-container");
       const line = document.createElement("div");
-      const d = new Date(msg.timestamp * 1000);
+      const d = new Date(msg.timestamp);
       const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const isMe = msg.fromId === myId;
+      const isMe = msg.fromPeerId === myId;
 
       line.style.fontSize = "12px";
       line.innerHTML = `
         <span style="font-family: var(--font-mono); color: var(--text-dim); margin-right: 6px;">[${timeStr}]</span>
-        <span style="font-weight: 700; color: ${isMe ? 'var(--accent)' : '#3b82f6'}; margin-right: 6px;">${msg.fromNick}:</span>
-        <span style="color: #fff;">${msg.text}</span>
+        <span style="font-weight: 700; color: ${isMe ? 'var(--accent)' : '#3b82f6'}; margin-right: 6px;">${escapeHtml(msg.fromNick)}:</span>
+        <span style="color: #fff;">${escapeHtml(msg.text)}</span>
       `;
       box.appendChild(line);
       box.scrollTop = box.scrollHeight;
@@ -895,14 +968,22 @@
     function openCreateModal(presetId = null) {
       if (presetId) document.getElementById("create-game-preset").value = presetId;
       document.getElementById("create-modal").classList.add("active");
+      setTimeout(() => document.getElementById("create-room-name").focus(), 50);
     }
 
     function openJoinModal() {
       document.getElementById("join-modal").classList.add("active");
+      setTimeout(() => document.getElementById("join-room-code").focus(), 50);
     }
 
     function closeModals() {
       document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active"));
+    }
+
+    function onOverlayClick(e, modalId) {
+      if (e.target && e.target.id === modalId) {
+        closeModals();
+      }
     }
 
     function submitCreateRoom() {
@@ -910,9 +991,15 @@
       const preset = document.getElementById("create-game-preset").value;
       const password = document.getElementById("create-room-pass").value;
 
-      sendWS("create_room", { name, gamePreset: preset, password, maxPeers: 16, nick: myNick });
+      sendWS({
+        type: "create_room",
+        name: name,
+        gamePreset: preset,
+        password: password,
+        hostNick: myNick,
+        maxPeers: 16
+      });
       closeModals();
-      showToast("Комната создана!");
     }
 
     function submitJoinRoom() {
@@ -920,14 +1007,19 @@
       const password = document.getElementById("join-room-pass").value;
       if (!code) return;
 
-      sendWS("join_room", { code, password, nick: myNick });
+      sendWS({
+        type: "join_room",
+        code: code,
+        nick: myNick,
+        password: password
+      });
       closeModals();
-      showToast("Подключение к " + code + "...");
     }
 
     function leaveRoom() {
-      sendWS("leave_room");
+      sendWS({ type: "leave_room" });
       currentRoom = null;
+      document.getElementById("chat-messages-container").innerHTML = "";
       updateRoomUI();
       showToast("Вы вышли из комнаты");
     }
@@ -946,16 +1038,47 @@
     }
 
     function copyText(val) {
-      navigator.clipboard.writeText(val).then(() => {
+      if (!val) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(val).then(() => {
+          showToast("Скопировано: " + val);
+        }).catch(() => fallbackCopy(val));
+      } else {
+        fallbackCopy(val);
+      }
+    }
+
+    function fallbackCopy(val) {
+      const ta = document.createElement("textarea");
+      ta.value = val;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
         showToast("Скопировано: " + val);
-      });
+      } catch (err) {
+        console.error("Copy failed", err);
+      }
+      document.body.removeChild(ta);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     function showToast(text) {
       const container = document.getElementById("toast-container");
       const toast = document.createElement("div");
       toast.className = "toast";
-      toast.innerHTML = `<span style="color: var(--accent);">●</span> ${text}`;
+      toast.innerHTML = `<span style="color: var(--accent);">●</span> ${escapeHtml(text)}`;
       container.appendChild(toast);
 
       setTimeout(() => {
@@ -963,7 +1086,7 @@
         toast.style.opacity = "0";
         toast.style.transform = "translateY(-10px)";
         setTimeout(() => toast.remove(), 200);
-      }, 2200);
+      }, 2400);
     }
   </script>
 </body>
