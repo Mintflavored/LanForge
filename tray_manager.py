@@ -72,8 +72,10 @@ class TrayManager:
             title=f"{self.app_name} — Virtual LAN",
             menu=self._create_menu()
         )
-        self._thread = threading.Thread(target=self.tray.run, daemon=True)
-        self._thread.start()
+        try:
+            self.tray.run_detached()
+        except Exception as e:
+            print(f"[Tray Start Error] {e}")
 
     def stop(self):
         if self.tray:
