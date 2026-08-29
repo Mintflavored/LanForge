@@ -67,18 +67,25 @@ def start_backend_server():
     if is_port_open("127.0.0.1", 8787):
         return  # Server already running
 
-    server_bin = os.path.join(base_dir, "bin", "lanforge-server.exe")
-    if not os.path.exists(server_bin):
-        server_bin = os.path.join(base_dir, "lanforge-server.exe")
+    candidates = [
+        os.path.join(exe_dir, "lanforge-server.exe"),
+        os.path.join(base_dir, "bin", "lanforge-server.exe"),
+        os.path.join(base_dir, "lanforge-server.exe")
+    ]
+    server_bin = None
+    for cand in candidates:
+        if os.path.exists(cand):
+            server_bin = cand
+            break
 
-    if os.path.exists(server_bin):
+    if server_bin:
         creation_flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
         server_proc = subprocess.Popen(
             [server_bin, "-port", "8787"],
-            cwd=base_dir,
+            cwd=os.path.dirname(server_bin),
             creationflags=creation_flags
         )
-        for _ in range(15):
+        for _ in range(20):
             time.sleep(0.1)
             if is_port_open("127.0.0.1", 8787):
                 break
