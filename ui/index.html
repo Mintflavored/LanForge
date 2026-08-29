@@ -962,7 +962,6 @@
       ws.onopen = () => {
         console.log("[WS] Connected to Go Signaling Engine");
         startPingHeartbeat();
-        setTimeout(triggerStunBenchmark, 400);
       };
 
       ws.onmessage = (event) => {
@@ -1140,6 +1139,8 @@
     }
 
     // STUN MATRIX
+    let stunTimeoutTimer = null;
+
     function renderStunMatrix() {
       const container = document.getElementById("stun-matrix-container");
       container.innerHTML = "";
@@ -1162,15 +1163,28 @@
       const btn = document.getElementById("btn-probe-stun");
       const statusEl = document.getElementById("stun-matrix-status");
       btn.innerText = "⏳ Тестирование...";
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
       statusEl.innerText = "Опрос 9 глобальных узлов...";
+
+      if (stunTimeoutTimer) clearTimeout(stunTimeoutTimer);
+      stunTimeoutTimer = setTimeout(() => {
+        btn.innerText = "⚡ Тест STUN-пула";
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        statusEl.innerText = "Тест завершен (таймаут)";
+      }, 1600);
 
       sendWS({ type: "probe_stun" });
     }
 
     function updateStunMatrixResults(probes) {
+      if (stunTimeoutTimer) clearTimeout(stunTimeoutTimer);
       const btn = document.getElementById("btn-probe-stun");
       const statusEl = document.getElementById("stun-matrix-status");
       btn.innerText = "⚡ Тест STUN-пула";
+      btn.disabled = false;
+      btn.style.opacity = "1";
       statusEl.innerText = "Тест завершен успешно";
 
       probes.forEach(probe => {

@@ -40,15 +40,9 @@ var DefaultStunServers = []string{
 	"stun.framasoft.org:3478",
 }
 
-// DetectNat resolves public IP/Port and tests NAT behavior via concurrent STUN queries.
+// DetectNat resolves public IP/Port and tests NAT behavior via concurrent fast STUN queries.
 func DetectNat() Result {
-	conn, err := net.ListenUDP("udp4", nil)
-	if err != nil {
-		return Result{PublicIP: "127.0.0.1", PublicPort: 0, NatType: "Unknown"}
-	}
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 
 	type stunResponse struct {
@@ -60,11 +54,11 @@ func DetectNat() Result {
 	resChan := make(chan stunResponse, len(DefaultStunServers))
 	var wg sync.WaitGroup
 
-	for _, srv := range DefaultStunServers[:5] {
+	for _, srv := range DefaultStunServers[:4] {
 		wg.Add(1)
 		go func(serverAddr string) {
 			defer wg.Done()
-			ip, port, _, err := queryStunWithLatency(serverAddr, 1200*time.Millisecond)
+			ip, port, _, err := queryStunWithContext(ctx, serverAddr)
 			if err == nil && isValidPublicIP(ip) {
 				select {
 				case resChan <- stunResponse{server: serverAddr, ip: ip, port: port}:
@@ -88,19 +82,6 @@ func DetectNat() Result {
 	}
 
 	if len(responses) == 0 {
-		for _, srv := range DefaultStunServers[5:] {
-			ip, port, _, err := queryStunWithLatency(srv, 1000*time.Millisecond)
-			if err == nil && isValidPublicIP(ip) {
-				return Result{
-					PublicIP:     ip,
-					PublicPort:   port,
-					NatType:      "RestrictedCone",
-					IsBehindVPN:  detectVPNInterface(),
-					ActiveServer: srv,
-				}
-			}
-		}
-
 		return Result{
 			PublicIP:     "127.0.0.1",
 			PublicPort:   0,
@@ -130,23 +111,27 @@ func DetectNat() Result {
 	}
 }
 
-// ProbeAllStunServers probes all configured STUN servers in parallel and returns latency metrics.
+// ProbeAllStunServers probes all configured STUN servers in parallel with a strict 1200ms hard deadline.
 func ProbeAllStunServers() []protocol.StunProbeResult {
-	results := make([]protocol.StunProbeResult, len(DefaultStunServers))
-	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+	defer cancel()
 
+	results := make([]protocol.StunProbeResult, len(DefaultStunServers))
+	for i, srv := range DefaultStunServers {
+		results[i] = protocol.StunProbeResult{
+			Server: srv,
+			RTTMs:  0,
+			Status: "timeout",
+		}
+	}
+
+	var wg sync.WaitGroup
 	for i, srv := range DefaultStunServers {
 		wg.Add(1)
 		go func(idx int, serverAddr string) {
 			defer wg.Done()
-			ip, _, rtt, err := queryStunWithLatency(serverAddr, 1500*time.Millisecond)
-			if err != nil {
-				results[idx] = protocol.StunProbeResult{
-					Server: serverAddr,
-					RTTMs:  0,
-					Status: "timeout",
-				}
-			} else {
+			ip, _, rtt, err := queryStunWithContext(ctx, serverAddr)
+			if err == nil && isValidPublicIP(ip) {
 				results[idx] = protocol.StunProbeResult{
 					Server:   serverAddr,
 					RTTMs:    int(rtt.Milliseconds()),
@@ -201,9 +186,41 @@ func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0)
 }
 
-func queryStunWithLatency(serverAddr string, timeout time.Duration) (string, int, time.Duration, error) {
+func resolveUDPAddrWithContext(ctx context.Context, address string) (*net.UDPAddr, error) {
+	host, portStr, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	var port int
+	_, err = fmt.Sscanf(portStr, "%d", &port)
+	if err != nil {
+		return nil, err
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			return &net.UDPAddr{IP: ip4, Port: port}, nil
+		}
+		return nil, fmt.Errorf("non-ipv4 address")
+	}
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(ips) == 0 {
+		return nil, fmt.Errorf("lookup failed")
+	}
+
+	for _, ip := range ips {
+		if ip4 := ip.IP.To4(); ip4 != nil {
+			return &net.UDPAddr{IP: ip4, Port: port}, nil
+		}
+	}
+	return nil, fmt.Errorf("no ipv4 address found")
+}
+
+func queryStunWithContext(ctx context.Context, serverAddr string) (string, int, time.Duration, error) {
 	t0 := time.Now()
-	raddr, err := net.ResolveUDPAddr("udp4", serverAddr)
+
+	raddr, err := resolveUDPAddrWithContext(ctx, serverAddr)
 	if err != nil {
 		return "", 0, 0, err
 	}
@@ -220,7 +237,12 @@ func queryStunWithLatency(serverAddr string, timeout time.Duration) (string, int
 	binary.BigEndian.PutUint32(req[4:8], magicCookie)
 	_, _ = rand.Read(req[8:20])
 
-	_ = conn.SetDeadline(time.Now().Add(timeout))
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(1000 * time.Millisecond)
+	}
+	_ = conn.SetDeadline(deadline)
+
 	if _, err := conn.WriteTo(req, raddr); err != nil {
 		return "", 0, 0, err
 	}
@@ -228,7 +250,7 @@ func queryStunWithLatency(serverAddr string, timeout time.Duration) (string, int
 	buf := make([]byte, 512)
 	n, _, err := conn.ReadFrom(buf)
 	if err != nil || n < 20 {
-		return "", 0, 0, fmt.Errorf("timeout")
+		return "", 0, 0, fmt.Errorf("read timeout")
 	}
 
 	rtt := time.Since(t0)
