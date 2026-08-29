@@ -1,12 +1,12 @@
 """
-LANForge Desktop Launcher (v1.6.1)
+LANForge Desktop Launcher (v1.6.2)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
 - Hybrid Cloud & Local Signaling support
 """
 
-__version__ = "1.6.1"
+__version__ = "1.6.2"
 
 import os
 import sys
@@ -172,7 +172,7 @@ def main():
     tray.start()
 
     # Initial Discord RPC Status
-    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.1")
+    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.2")
 
     api = JsApi()
 

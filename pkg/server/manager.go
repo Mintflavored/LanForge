@@ -130,6 +130,21 @@ func (m *RoomManager) CreateRoom(peer *ConnectedPeer, name, gamePreset, password
 	return room.ToState(), peer.State, nil
 }
 
+func (m *RoomManager) findRoom(code string) (*Room, bool) {
+	norm := strings.ToUpper(strings.TrimSpace(code))
+	if r, ok := m.rooms[norm]; ok {
+		return r, true
+	}
+	clean := strings.ReplaceAll(strings.ReplaceAll(norm, "-", ""), " ", "")
+	for k, r := range m.rooms {
+		kClean := strings.ReplaceAll(strings.ReplaceAll(k, "-", ""), " ", "")
+		if kClean == clean {
+			return r, true
+		}
+	}
+	return nil, false
+}
+
 // JoinRoom adds a peer into an existing room.
 func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password string) (protocol.RoomState, protocol.PeerState, error) {
 	if peer.RoomCode != "" {
@@ -139,11 +154,11 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password string)
 	normCode := strings.ToUpper(strings.TrimSpace(code))
 
 	m.mu.RLock()
-	room, exists := m.rooms[normCode]
+	room, exists := m.findRoom(normCode)
 	m.mu.RUnlock()
 
 	if !exists {
-		return protocol.RoomState{}, protocol.PeerState{}, fmt.Errorf("комната %s не найдена", normCode)
+		return protocol.RoomState{}, protocol.PeerState{}, fmt.Errorf("комната %s не найдена на этом сервере", normCode)
 	}
 
 	room.Mu.Lock()

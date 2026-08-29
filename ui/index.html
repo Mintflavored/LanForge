@@ -976,11 +976,14 @@
   <!-- JOIN ROOM MODAL -->
   <div class="modal-overlay" id="join-modal" onclick="onOverlayClick(event, 'join-modal')">
     <div class="modal-box">
-      <h3 style="font-size: 16px; margin-bottom: 16px;">Войти в комнату по коду</h3>
-      <label class="card-title-badge">КОД КОМНАТЫ (6 СИМВОЛОВ)</label>
+      <h3 style="font-size: 16px; margin-bottom: 14px;">Войти в комнату по коду</h3>
+      <label class="card-title-badge">КОД КОМНАТЫ</label>
       <input type="text" class="input-field" id="join-room-code" placeholder="LAN-XXXX" style="font-family: var(--font-mono); text-transform: uppercase;" onkeydown="if(event.key==='Enter') submitJoinRoom()">
       <label class="card-title-badge">ПАРОЛЬ (ЕСЛИ ТРЕБУЕТСЯ)</label>
       <input type="password" class="input-field" id="join-room-pass" onkeydown="if(event.key==='Enter') submitJoinRoom()">
+      <div style="font-size: 11px; color: var(--text-dim); margin: 8px 0; line-height: 1.4;">
+        🌐 Сервер подключения: <span id="join-modal-server-lbl" style="color: var(--text-main); font-family: var(--font-mono);">127.0.0.1:8787</span>
+      </div>
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
         <button class="btn btn-primary" onclick="submitJoinRoom()">Подключиться</button>
@@ -1020,7 +1023,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.1</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.2</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1769,6 +1772,10 @@
     function openJoinModal() {
       document.getElementById("join-room-code").value = "";
       document.getElementById("join-room-pass").value = "";
+      const serverLbl = document.getElementById("join-modal-server-lbl");
+      if (serverLbl) {
+        serverLbl.innerText = currentServerUrl;
+      }
       document.getElementById("join-modal").classList.add("active");
       setTimeout(() => document.getElementById("join-room-code").focus(), 50);
     }
