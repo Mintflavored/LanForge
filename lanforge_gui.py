@@ -47,6 +47,7 @@ if getattr(sys, 'frozen', False):
         icon_path = os.path.join(sys._MEIPASS, "app_icon.png")
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    exe_dir = os.path.join(base_dir, "bin")
     html_path = os.path.join(base_dir, "ui", "index.html")
     icon_path = os.path.join(base_dir, "app_icon.png")
 
@@ -64,31 +65,34 @@ def is_port_open(host="127.0.0.1", port=8787):
 
 def start_backend_server():
     global server_proc
-    if is_port_open("127.0.0.1", 8787):
-        return  # Server already running
+    try:
+        if is_port_open("127.0.0.1", 8787):
+            return  # Server already running
 
-    candidates = [
-        os.path.join(exe_dir, "lanforge-server.exe"),
-        os.path.join(base_dir, "bin", "lanforge-server.exe"),
-        os.path.join(base_dir, "lanforge-server.exe")
-    ]
-    server_bin = None
-    for cand in candidates:
-        if os.path.exists(cand):
-            server_bin = cand
-            break
-
-    if server_bin:
-        creation_flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
-        server_proc = subprocess.Popen(
-            [server_bin, "-port", "8787"],
-            cwd=os.path.dirname(server_bin),
-            creationflags=creation_flags
-        )
-        for _ in range(20):
-            time.sleep(0.1)
-            if is_port_open("127.0.0.1", 8787):
+        candidates = [
+            os.path.join(exe_dir, "lanforge-server.exe"),
+            os.path.join(base_dir, "bin", "lanforge-server.exe"),
+            os.path.join(base_dir, "lanforge-server.exe")
+        ]
+        server_bin = None
+        for cand in candidates:
+            if cand and os.path.exists(cand):
+                server_bin = cand
                 break
+
+        if server_bin:
+            creation_flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
+            server_proc = subprocess.Popen(
+                [server_bin, "-port", "8787"],
+                cwd=os.path.dirname(server_bin),
+                creationflags=creation_flags
+            )
+            for _ in range(25):
+                time.sleep(0.1)
+                if is_port_open("127.0.0.1", 8787):
+                    break
+    except Exception as e:
+        print(f"[Backend Spawn Error] {e}")
 
 def stop_backend_server():
     global server_proc
