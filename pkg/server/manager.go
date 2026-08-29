@@ -185,7 +185,7 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password string)
 	peer.State.Nick = nick
 	peer.State.IsHost = false
 	peer.State.VirtualIP = ip
-	peer.RoomCode = normCode
+	peer.RoomCode = room.Code
 
 	room.Mu.Lock()
 	room.Peers[peer.ID] = peer
@@ -207,7 +207,7 @@ func (m *RoomManager) LeaveRoom(peer *ConnectedPeer) {
 	}
 
 	m.mu.RLock()
-	room, exists := m.rooms[peer.RoomCode]
+	room, exists := m.findRoom(peer.RoomCode)
 	m.mu.RUnlock()
 
 	if !exists {
@@ -241,9 +241,20 @@ func (m *RoomManager) LeaveRoom(peer *ConnectedPeer) {
 	peer.State.IsHost = false
 
 	if remainingCount == 0 {
-		m.mu.Lock()
-		delete(m.rooms, room.Code)
-		m.mu.Unlock()
+		// Keep the room alive for 2 minutes in case of client reconnects
+		go func(roomCode string) {
+			time.Sleep(2 * time.Minute)
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if r, ok := m.rooms[roomCode]; ok {
+				r.Mu.Lock()
+				count := len(r.Peers)
+				r.Mu.Unlock()
+				if count == 0 {
+					delete(m.rooms, roomCode)
+				}
+			}
+		}(room.Code)
 	} else {
 		// Broadcast outside of mutex lock (prevents deadlock)
 		room.Broadcast(protocol.ServerMessage{

@@ -1023,7 +1023,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.5</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.6</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1166,6 +1166,15 @@
         console.log("[WS] Connected to Signaling Engine at:", currentServerUrl);
         startPingHeartbeat();
         updateConnectionStatus(true);
+
+        // If client had an active room session, re-sync with the server
+        if (currentRoom && currentRoom.code) {
+          sendWS({
+            type: "join_room",
+            code: currentRoom.code,
+            nick: myNick || "Player"
+          });
+        }
       };
 
       ws.onmessage = (event) => {
