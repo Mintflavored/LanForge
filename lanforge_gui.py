@@ -180,9 +180,9 @@ def main():
         title="LANForge",
         url=html_path,
         js_api=api,
-        width=1140,
-        height=860,
-        min_size=(1140, 860),
+        width=1920,
+        height=1080,
+        min_size=(1040, 660),
         resizable=True,
         background_color="#09090b",
         easy_drag=False
