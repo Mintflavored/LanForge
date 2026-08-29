@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LANForge — P2P Virtual Network</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card: #121215;
+      --card-hover: #18181c;
+      --border: #27272a;
+      --border-focus: #3f3f46;
+      --text-main: #ffffff;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent: #ff5500;
+      --accent-hover: #ff6a1a;
+      --green: #22c55e;
+      --red: #ef4444;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* TOP NAVIGATION */
+    header {
+      height: 58px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-dot {
+      color: var(--accent);
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .nav-tabs {
+      display: flex;
+      background: var(--card);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      gap: 2px;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .nav-btn:hover {
+      color: var(--text-main);
+      background: var(--card-hover);
+    }
+
+    .nav-btn.active {
+      color: var(--text-main);
+      background: #222228;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.12s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 0 12px rgba(255, 85, 0, 0.35);
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      border-color: var(--border);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background: var(--card-hover);
+      border-color: var(--border-focus);
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    /* MAIN CONTAINER */
+    main {
+      flex: 1;
+      padding: 20px 24px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .view-pane {
+      display: none;
+      height: 100%;
+      animation: view-fade-in 0.12s ease-out;
+    }
+
+    .view-pane.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    @keyframes view-fade-in {
+      from { opacity: 0.6; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* BENTO GRID (OVERVIEW) */
+    .bento-overview {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 16px;
+      height: 100%;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .card-title-badge {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .bento-right-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .bento-right-stack .card {
+      padding: 16px;
+      flex: 1;
+    }
+
+    .mono-val {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin: 4px 0 8px;
+    }
+
+    .connect-box {
+      background: #18181c;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+    }
+
+    .peer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #18181c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+    }
+
+    .online-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+      margin-right: 8px;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    /* GAMES CATALOG (2-COL BENTO) */
+    .games-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .search-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #fff;
+      font-size: 12px;
+      width: 240px;
+      outline: none;
+      transition: border-color 0.12s;
+    }
+    .search-bar:focus {
+      border-color: var(--accent);
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .chip {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .chip.active {
+      background: #222228;
+      border-color: #3f3f46;
+      color: #fff;
+    }
+
+    .games-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 4px;
+    }
+
+    .game-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.12s, transform 0.12s;
+    }
+    .game-card:hover {
+      border-color: var(--border-focus);
+      background: var(--card-hover);
+    }
+
+    /* TOAST BANNER */
+    #toast-container {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast {
+      background: #18181c;
+      border: 1px solid var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 18px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: toast-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(-16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* MODAL DIALOGS */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 420px;
+      padding: 24px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.8);
+    }
+
+    .input-field {
+      width: 100%;
+      background: #18181c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+      margin: 6px 0 14px;
+      outline: none;
+    }
+    .input-field:focus {
+      border-color: var(--accent);
+    }
+
+    /* CHAT STREAM */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .chat-scroll {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container"></div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      LANFORGE<span class="brand-dot">.</span>
+    </div>
+
+    <nav class="nav-tabs">
+      <button class="nav-btn active" onclick="switchTab('overview')">Обзор</button>
+      <button class="nav-btn" onclick="switchTab('games')">Игры</button>
+      <button class="nav-btn" onclick="switchTab('radar')">LAN Радар</button>
+      <button class="nav-btn" onclick="switchTab('chat')">Чат</button>
+      <button class="nav-btn" onclick="switchTab('diag')">Диагностика</button>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Создать сеть</button>
+      <button class="btn btn-secondary" onclick="openJoinModal()">Войти по коду</button>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWS -->
+  <main>
+    <!-- 1. OVERVIEW VIEW -->
+    <section id="view-overview" class="view-pane active">
+      <div class="bento-overview">
+        <!-- LEFT: ROOM CARD -->
+        <div class="card" id="room-card-container">
+          <div class="card-title-badge">ВИРТУАЛЬНАЯ СЕТЬ</div>
+          <div id="room-standby">
+            <h2 style="font-size: 24px; margin: 4px 0 8px;">Сеть не подключена</h2>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 24px; line-height: 1.5;">
+              Создайте комнату для совместной игры или введите 6-значный код комнаты хоста для подключения через P2P туннель.
+            </p>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-primary" onclick="openCreateModal()">Создать комнату</button>
+              <button class="btn btn-secondary" onclick="openJoinModal()">Войти по коду</button>
+            </div>
+          </div>
+
+          <div id="room-active" style="display: none; height: 100%; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 id="room-name-lbl" style="font-size: 20px;">Комната</h2>
+                <button class="btn btn-secondary btn-sm" id="room-code-btn" onclick="copyRoomCode()">LAN-XXXX 📋</button>
+              </div>
+              <button class="btn btn-secondary btn-sm" style="color: var(--red);" onclick="leaveRoom()">Отключиться</button>
+            </div>
+
+            <div class="connect-box">
+              <span id="direct-addr-lbl" style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;">Адрес хоста: 10.42.0.1:25565</span>
+              <button class="btn btn-secondary btn-sm" onclick="copyDirectAddr()">Копировать адрес</button>
+            </div>
+
+            <div class="card-title-badge" id="peers-count-lbl" style="margin-top: 8px;">УЧАСТНИКИ (0/16):</div>
+            <div id="peers-list" style="flex: 1; overflow-y: auto; margin-top: 4px;"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: TILES -->
+        <div class="bento-right-stack">
+          <div class="card">
+            <div class="card-title-badge">ВАШ ВИРТУАЛЬНЫЙ IP</div>
+            <div class="mono-val" id="my-ip-lbl">10.42.0.X</div>
+            <button class="btn btn-secondary btn-sm" style="align-self: flex-start;" onclick="copyMyIp()">Копировать IP</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title-badge">ЗАДЕРЖКА СЕТИ (RTT)</div>
+            <div class="mono-val" id="my-ping-lbl" style="color: var(--green);">&lt; 1 ms</div>
+            <div style="display: flex; align-items: center; font-size: 11px; color: var(--text-muted);">
+              <span class="online-dot"></span> Прямой P2P туннель активен
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title-badge">ШЛЮЗ И UPNP МАРШРУТИЗАЦИЯ</div>
+            <div style="font-size: 14px; font-weight: 700; margin: 4px 0 2px;">Restricted Cone NAT</div>
+            <div style="font-size: 11px; color: var(--text-muted);">UPnP IGD авто-проброс портов включен</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. GAMES CATALOG VIEW -->
+    <section id="view-games" class="view-pane">
+      <div class="games-header">
+        <h2 style="font-size: 18px;">Каталог поддерживаемых игр</h2>
+        <input type="text" class="search-bar" id="game-search-input" placeholder="Поиск по названию..." oninput="filterGames()">
+      </div>
+
+      <div class="filter-chips">
+        <button class="chip active" onclick="setGameCategory('Все', this)">Все</button>
+        <button class="chip" onclick="setGameCategory('Песочницы', this)">Песочницы</button>
+        <button class="chip" onclick="setGameCategory('Шутеры', this)">Шутеры</button>
+        <button class="chip" onclick="setGameCategory('Выживание', this)">Выживание</button>
+        <button class="chip" onclick="setGameCategory('Классика', this)">Классика</button>
+      </div>
+
+      <div class="games-grid" id="games-grid-container"></div>
+    </section>
+
+    <!-- 3. RADAR VIEW -->
+    <section id="view-radar" class="view-pane">
+      <h2 style="font-size: 18px; margin-bottom: 4px;">LAN Радар (Автопоиск серверов)</h2>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        LANForge перехватывает широковещательные UDP-пакеты игр (Minecraft, Source) и ретранслирует их всем участникам комнаты.
+      </p>
+      <div class="card" style="padding: 12px 16px; margin-bottom: 12px; flex-direction: row; align-items: center; gap: 8px;">
+        <span class="online-dot"></span>
+        <span style="font-family: var(--font-mono); font-size: 11px; color: var(--green); font-weight: 700;">
+          СКАНИРОВАНИЕ UDP 255.255.255.255 АКТИВНО
+        </span>
+      </div>
+      <div class="card" id="radar-list" style="flex: 1; overflow-y: auto;">
+        <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 40px;">
+          Активных LAN-миров в сети пока не обнаружено.<br>Откройте мир для сети в Minecraft или запустите локальный сервер.
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. CHAT VIEW -->
+    <section id="view-chat" class="view-pane">
+      <div class="chat-container">
+        <h2 style="font-size: 18px; margin-bottom: 8px;">Чат комнаты</h2>
+        <div class="chat-scroll" id="chat-messages-container"></div>
+        <div class="chat-input-row">
+          <input type="text" class="search-bar" id="chat-input-field" style="flex: 1;" placeholder="Напишите сообщение..." onkeydown="if(event.key==='Enter') sendChat()">
+          <button class="btn btn-primary" onclick="sendChat()">Отправить</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. DIAG VIEW -->
+    <section id="view-diag" class="view-pane">
+      <h2 style="font-size: 18px; margin-bottom: 12px;">Сетевая диагностика и телеметрия</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1;">
+        <div class="card">
+          <div class="card-title-badge">NAT ТИП И ТОПОЛОГИЯ</div>
+          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">Restricted Cone NAT</div>
+          <div style="font-size: 12px; color: var(--green);">Прямое P2P-соединение возможно без TURN-реле</div>
+        </div>
+        <div class="card">
+          <div class="card-title-badge">STUN СЕРВЕРЫ</div>
+          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">stun.l.google.com:19302</div>
+          <div style="font-size: 12px; color: var(--green);">Обнаружение публичного IP и порта активно (RTT &lt; 15ms)</div>
+        </div>
+        <div class="card">
+          <div class="card-title-badge">UPNP IGD МАРШРУТИЗАЦИЯ</div>
+          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">Совместимый шлюз найден</div>
+          <div style="font-size: 12px; color: var(--green);">Автоматический проброс игровых портов включен</div>
+        </div>
+        <div class="card">
+          <div class="card-title-badge">MTU И БУФЕРЫ</div>
+          <div style="font-size: 16px; font-weight: 700; margin: 6px 0;">MTU: 1420 (Виртуальный туннель)</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Оптимизировано для отсутствия фрагментации пакетов</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- CREATE ROOM MODAL -->
+  <div class="modal-overlay" id="create-modal">
+    <div class="modal-box">
+      <h3 style="font-size: 16px; margin-bottom: 16px;">Создать виртуальную комнату</h3>
+      <label class="card-title-badge">НАЗВАНИЕ КОМНАТЫ</label>
+      <input type="text" class="input-field" id="create-room-name" value="Сервер друзей">
+      <label class="card-title-badge">ИГРОВОЙ ПРЕСЕТ</label>
+      <select class="input-field" id="create-game-preset"></select>
+      <label class="card-title-badge">ПАРОЛЬ (НЕОБЯЗАТЕЛЬНО)</label>
+      <input type="password" class="input-field" id="create-room-pass" placeholder="Оставьте пустым для открытого входа">
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+        <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
+        <button class="btn btn-primary" onclick="submitCreateRoom()">Создать комнату</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JOIN ROOM MODAL -->
+  <div class="modal-overlay" id="join-modal">
+    <div class="modal-box">
+      <h3 style="font-size: 16px; margin-bottom: 16px;">Войти в комнату по коду</h3>
+      <label class="card-title-badge">КОД КОМНАТЫ (6 СИМВОЛОВ)</label>
+      <input type="text" class="input-field" id="join-room-code" placeholder="LAN-XXXX" style="font-family: var(--font-mono); text-transform: uppercase;">
+      <label class="card-title-badge">ПАРОЛЬ (ЕСЛИ ТРЕБУЕТСЯ)</label>
+      <input type="password" class="input-field" id="join-room-pass">
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+        <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
+        <button class="btn btn-primary" onclick="submitJoinRoom()">Подключиться</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // PRESETS CATALOG
+    const GAME_PRESETS = [
+      { id: "minecraft_java", name: "Minecraft (Java Edition)", category: "Песочницы", port: 25565, protocol: "TCP", hint: "Сетевая игра -> Прямое подключение -> {HOST_IP}:25565" },
+      { id: "terraria", name: "Terraria", category: "Песочницы", port: 7777, protocol: "TCP", hint: "Многопользовательская игра -> Присоединиться по IP -> {HOST_IP}:7777" },
+      { id: "palworld", name: "Palworld", category: "Выживание", port: 8211, protocol: "UDP", hint: "Присоединиться к мультиплееру -> ввести {HOST_IP}:8211" },
+      { id: "cs_source", name: "Counter-Strike / Source Games", category: "Шутеры", port: 27015, protocol: "UDP", hint: "В консоли игры: connect {HOST_IP}:27015" },
+      { id: "valheim", name: "Valheim", category: "Выживание", port: 2456, protocol: "UDP", hint: "Start Server / Присоединиться по IP -> {HOST_IP}:2456" },
+      { id: "stardew_valley", name: "Stardew Valley", category: "Песочницы", port: 24642, protocol: "UDP", hint: "Совместная игра -> Вступить по LAN -> {HOST_IP}" },
+      { id: "factorio", name: "Factorio", category: "Песочницы", port: 34197, protocol: "UDP", hint: "Сетевая игра -> Локальная игра (LAN) -> {HOST_IP}" },
+      { id: "project_zomboid", name: "Project Zomboid", category: "Выживание", port: 16261, protocol: "UDP", hint: "Войти на сервер -> Добавить IP: {HOST_IP}:16261" },
+      { id: "dont_starve", name: "Don't Starve Together", category: "Выживание", port: 10999, protocol: "UDP", hint: "Просмотр игр -> Фильтр LAN -> Сервер хоста" },
+      { id: "homm3", name: "Heroes of Might and Magic III", category: "Классика", port: 2300, protocol: "TCP", hint: "Многопользовательская -> TCP/IP -> {HOST_IP}" },
+      { id: "worms_armageddon", name: "Worms Armageddon", category: "Классика", port: 17011, protocol: "TCP", hint: "Сетевая игра -> Direct IP -> {HOST_IP}" },
+      { id: "assetto_corsa", name: "Assetto Corsa", category: "Классика", port: 9600, protocol: "BOTH", hint: "Content Manager -> Drive -> LAN -> Сервер хоста" },
+    ];
+
+    let currentRoom = null;
+    let myNick = "User_" + Math.floor(Math.random() * 1000);
+    let myVirtualIp = "10.42.0.1";
+    let myId = "";
+    let selectedCategory = "Все";
+    let ws = null;
+
+    // INITIALIZATION
+    window.addEventListener("DOMContentLoaded", () => {
+      renderPresets();
+      connectWebSocket();
+    });
+
+    // WEBSOCKET CLIENT
+    function connectWebSocket() {
+      ws = new WebSocket("ws://localhost:8787");
+
+      ws.onopen = () => {
+        console.log("[WS] Connected to Go Backend");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch (e) {
+          console.error("[WS] Parse error:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log("[WS] Disconnected, reconnecting...");
+        setTimeout(connectWebSocket, 1500);
+      };
+    }
+
+    function sendWS(action, data = {}) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action, data }));
+      }
+    }
+
+    function handleServerMessage(msg) {
+      switch (msg.type) {
+        case "room_state":
+          currentRoom = msg.room;
+          if (msg.you) {
+            myVirtualIp = msg.you.virtualIp || "10.42.0.1";
+            myId = msg.you.id || "";
+          }
+          updateRoomUI();
+          break;
+        case "ping":
+          const pingVal = msg.rtt || 0;
+          document.getElementById("my-ping-lbl").innerText = pingVal > 0 ? pingVal + " ms" : "< 1 ms";
+          break;
+        case "chat_message":
+          appendChatMessage(msg.message);
+          break;
+        case "discovered_game":
+          showToast("Обнаружен LAN-мир: " + msg.game.name);
+          break;
+        case "error":
+          alert("Ошибка: " + msg.error);
+          break;
+      }
+    }
+
+    // UI RENDERERS
+    function switchTab(tabId) {
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".view-pane").forEach(p => p.classList.remove("active"));
+
+      const targetPane = document.getElementById("view-" + tabId);
+      if (targetPane) targetPane.classList.add("active");
+
+      const btn = Array.from(document.querySelectorAll(".nav-btn")).find(b => b.getAttribute("onclick").includes(tabId));
+      if (btn) btn.classList.add("active");
+    }
+
+    function renderPresets() {
+      const select = document.getElementById("create-game-preset");
+      select.innerHTML = "";
+      GAME_PRESETS.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.innerText = p.name;
+        select.appendChild(opt);
+      });
+      filterGames();
+    }
+
+    function filterGames() {
+      const query = (document.getElementById("game-search-input").value || "").toLowerCase();
+      const container = document.getElementById("games-grid-container");
+      container.innerHTML = "";
+
+      const filtered = GAME_PRESETS.filter(p => {
+        const matchesCat = (selectedCategory === "Все" || p.category === selectedCategory);
+        const matchesSearch = (!query || p.name.toLowerCase().includes(query));
+        return matchesCat && matchesSearch;
+      });
+
+      filtered.forEach(p => {
+        const card = document.createElement("div");
+        card.className = "game-card";
+        card.innerHTML = `
+          <div>
+            <div style="font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+              ${p.name}
+              <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);">[${p.protocol}:${p.port}]</span>
+            </div>
+            <div style="font-size: 10px; color: #71717a; margin-top: 3px;">${p.hint}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openCreateModal('${p.id}')">Создать</button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function setGameCategory(cat, btn) {
+      selectedCategory = cat;
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      filterGames();
+    }
+
+    function updateRoomUI() {
+      const standby = document.getElementById("room-standby");
+      const active = document.getElementById("room-active");
+      const myIpLbl = document.getElementById("my-ip-lbl");
+
+      if (!currentRoom) {
+        standby.style.display = "block";
+        active.style.display = "none";
+        myIpLbl.innerText = "10.42.0.X";
+        return;
+      }
+
+      standby.style.display = "none";
+      active.style.display = "flex";
+      myIpLbl.innerText = myVirtualIp;
+
+      document.getElementById("room-name-lbl").innerText = currentRoom.name || "Комната";
+      document.getElementById("room-code-btn").innerText = (currentRoom.code || "LAN-XXXX") + " 📋";
+
+      const preset = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset) || GAME_PRESETS[0];
+      const port = preset.port;
+      document.getElementById("direct-addr-lbl").innerText = `Адрес хоста в игре:  10.42.0.1:${port}`;
+
+      const peers = currentRoom.peers || [];
+      document.getElementById("peers-count-lbl").innerText = `УЧАСТНИКИ (${peers.length}/${currentRoom.maxPeers || 16}):`;
+
+      const list = document.getElementById("peers-list");
+      list.innerHTML = "";
+      peers.forEach(peer => {
+        const row = document.createElement("div");
+        row.className = "peer-row";
+        let nickTxt = peer.nick || "User";
+        if (peer.isHost) nickTxt += " (Хост)";
+        if (peer.id === myId) nickTxt += " (Вы)";
+
+        const pingMs = peer.pingMs || 0;
+        const pStr = pingMs > 0 ? pingMs + " ms" : "< 1 ms";
+        const pCol = pingMs < 50 ? "var(--green)" : "var(--accent)";
+
+        row.innerHTML = `
+          <div style="display: flex; align-items: center;">
+            <span class="online-dot"></span>
+            <span style="font-size: 12px; font-weight: 700;">${nickTxt}</span>
+            <button class="btn btn-secondary btn-sm" style="margin-left: 10px; font-family: var(--font-mono); font-size: 10px;" onclick="copyText('${peer.virtualIp}')">${peer.virtualIp} 📋</button>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: ${pCol};">${pStr}</span>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    // CHAT
+    function sendChat() {
+      const input = document.getElementById("chat-input-field");
+      const text = input.value.trim();
+      if (!text) return;
+      sendWS("chat_message", { text });
+      input.value = "";
+    }
+
+    function appendChatMessage(msg) {
+      const box = document.getElementById("chat-messages-container");
+      const line = document.createElement("div");
+      const d = new Date(msg.timestamp * 1000);
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isMe = msg.fromId === myId;
+
+      line.style.fontSize = "12px";
+      line.innerHTML = `
+        <span style="font-family: var(--font-mono); color: var(--text-dim); margin-right: 6px;">[${timeStr}]</span>
+        <span style="font-weight: 700; color: ${isMe ? 'var(--accent)' : '#3b82f6'}; margin-right: 6px;">${msg.fromNick}:</span>
+        <span style="color: #fff;">${msg.text}</span>
+      `;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    // ACTIONS & MODALS
+    function openCreateModal(presetId = null) {
+      if (presetId) document.getElementById("create-game-preset").value = presetId;
+      document.getElementById("create-modal").classList.add("active");
+    }
+
+    function openJoinModal() {
+      document.getElementById("join-modal").classList.add("active");
+    }
+
+    function closeModals() {
+      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active"));
+    }
+
+    function submitCreateRoom() {
+      const name = document.getElementById("create-room-name").value.trim() || "Комната";
+      const preset = document.getElementById("create-game-preset").value;
+      const password = document.getElementById("create-room-pass").value;
+
+      sendWS("create_room", { name, gamePreset: preset, password, maxPeers: 16, nick: myNick });
+      closeModals();
+      showToast("Комната создана!");
+    }
+
+    function submitJoinRoom() {
+      const code = document.getElementById("join-room-code").value.trim().toUpperCase();
+      const password = document.getElementById("join-room-pass").value;
+      if (!code) return;
+
+      sendWS("join_room", { code, password, nick: myNick });
+      closeModals();
+      showToast("Подключение к " + code + "...");
+    }
+
+    function leaveRoom() {
+      sendWS("leave_room");
+      currentRoom = null;
+      updateRoomUI();
+      showToast("Вы вышли из комнаты");
+    }
+
+    function copyRoomCode() {
+      if (currentRoom) copyText(currentRoom.code);
+    }
+
+    function copyMyIp() {
+      copyText(myVirtualIp);
+    }
+
+    function copyDirectAddr() {
+      const preset = GAME_PRESETS.find(p => p.id === (currentRoom ? currentRoom.gamePreset : "")) || GAME_PRESETS[0];
+      copyText(`10.42.0.1:${preset.port}`);
+    }
+
+    function copyText(val) {
+      navigator.clipboard.writeText(val).then(() => {
+        showToast("Скопировано: " + val);
+      });
+    }
+
+    function showToast(text) {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.innerHTML = `<span style="color: var(--accent);">●</span> ${text}`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.transition = "opacity 0.2s, transform 0.2s";
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-10px)";
+        setTimeout(() => toast.remove(), 200);
+      }, 2200);
+    }
+  </script>
+</body>
+</html>
