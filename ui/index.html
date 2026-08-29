@@ -926,13 +926,13 @@
     const STUN_SERVERS = [
       { name: "Google STUN 1", server: "stun.l.google.com:19302" },
       { name: "Google STUN 2", server: "stun1.l.google.com:19302" },
+      { name: "Google STUN 3", server: "stun3.l.google.com:19302" },
+      { name: "Google STUN 4", server: "stun4.l.google.com:19302" },
       { name: "Cloudflare STUN", server: "stun.cloudflare.com:3478" },
       { name: "Twilio Global", server: "global.stun.twilio.com:3478" },
       { name: "Nextcloud SSL", server: "stun.nextcloud.com:443" },
-      { name: "Matrix STUN", server: "stun.matrix.org:3478" },
-      { name: "VoIP Around", server: "stun.voiparound.com:3478" },
-      { name: "Sipgate STUN", server: "stun.sipgate.net:3478" },
       { name: "Framasoft STUN", server: "stun.framasoft.org:3478" },
+      { name: "Sipgate Europe", server: "stun.sipgate.net:3478" },
     ];
 
     let currentRoom = null;
@@ -1162,18 +1162,27 @@
     function triggerStunBenchmark() {
       const btn = document.getElementById("btn-probe-stun");
       const statusEl = document.getElementById("stun-matrix-status");
-      btn.innerText = "⏳ Тестирование...";
+      btn.innerText = "⏳ Опрос серверов...";
       btn.disabled = true;
       btn.style.opacity = "0.6";
-      statusEl.innerText = "Опрос 9 глобальных узлов...";
+      statusEl.innerText = "Параллельный опрос 9 глобальных узлов...";
+
+      // Reset all tiles to animated testing indicator
+      STUN_SERVERS.forEach((_, idx) => {
+        const valEl = document.getElementById("stun-val-" + idx);
+        if (valEl) {
+          valEl.className = "p2p-badge p2p-badge-direct";
+          valEl.innerText = "⏳ ...";
+        }
+      });
 
       if (stunTimeoutTimer) clearTimeout(stunTimeoutTimer);
       stunTimeoutTimer = setTimeout(() => {
         btn.innerText = "⚡ Тест STUN-пула";
         btn.disabled = false;
         btn.style.opacity = "1";
-        statusEl.innerText = "Тест завершен (таймаут)";
-      }, 1600);
+        statusEl.innerText = "Тест завершен";
+      }, 3000);
 
       sendWS({ type: "probe_stun" });
     }
@@ -1185,7 +1194,7 @@
       btn.innerText = "⚡ Тест STUN-пула";
       btn.disabled = false;
       btn.style.opacity = "1";
-      statusEl.innerText = "Тест завершен успешно";
+      statusEl.innerText = "Тест успешно завершен";
 
       probes.forEach(probe => {
         const idx = STUN_SERVERS.findIndex(s => s.server === probe.server);

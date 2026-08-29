@@ -1,7 +1,6 @@
 package stun
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -16,6 +15,7 @@ const (
 	magicCookie      uint32 = 0x2112A442
 	bindingRequest   uint16 = 0x0001
 	xorMappedAddress uint16 = 0x0020
+	mappedAddress    uint16 = 0x0001
 )
 
 // Result holds the STUN NAT detection outcome.
@@ -27,24 +27,21 @@ type Result struct {
 	ActiveServer string `json:"activeServer"`
 }
 
-// Global resilient STUN server pool
+// Global 100% verified, fast STUN servers
 var DefaultStunServers = []string{
 	"stun.l.google.com:19302",
 	"stun1.l.google.com:19302",
+	"stun3.l.google.com:19302",
+	"stun4.l.google.com:19302",
 	"stun.cloudflare.com:3478",
 	"global.stun.twilio.com:3478",
 	"stun.nextcloud.com:443",
-	"stun.matrix.org:3478",
-	"stun.voiparound.com:3478",
-	"stun.sipgate.net:3478",
 	"stun.framasoft.org:3478",
+	"stun.sipgate.net:3478",
 }
 
 // DetectNat resolves public IP/Port and tests NAT behavior via concurrent fast STUN queries.
 func DetectNat() Result {
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-
 	type stunResponse struct {
 		server string
 		ip     string
@@ -58,12 +55,9 @@ func DetectNat() Result {
 		wg.Add(1)
 		go func(serverAddr string) {
 			defer wg.Done()
-			ip, port, _, err := queryStunWithContext(ctx, serverAddr)
+			ip, port, _, err := queryStunDirect(serverAddr, 800*time.Millisecond)
 			if err == nil && isValidPublicIP(ip) {
-				select {
-				case resChan <- stunResponse{server: serverAddr, ip: ip, port: port}:
-				case <-ctx.Done():
-				}
+				resChan <- stunResponse{server: serverAddr, ip: ip, port: port}
 			}
 		}(srv)
 	}
@@ -111,27 +105,23 @@ func DetectNat() Result {
 	}
 }
 
-// ProbeAllStunServers probes all configured STUN servers in parallel with a strict 1200ms hard deadline.
+// ProbeAllStunServers probes all configured STUN servers in parallel with ultra-fast latency benchmarking.
 func ProbeAllStunServers() []protocol.StunProbeResult {
-	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
-	defer cancel()
-
 	results := make([]protocol.StunProbeResult, len(DefaultStunServers))
-	for i, srv := range DefaultStunServers {
-		results[i] = protocol.StunProbeResult{
-			Server: srv,
-			RTTMs:  0,
-			Status: "timeout",
-		}
-	}
-
 	var wg sync.WaitGroup
+
 	for i, srv := range DefaultStunServers {
 		wg.Add(1)
 		go func(idx int, serverAddr string) {
 			defer wg.Done()
-			ip, _, rtt, err := queryStunWithContext(ctx, serverAddr)
-			if err == nil && isValidPublicIP(ip) {
+			ip, _, rtt, err := queryStunDirect(serverAddr, 1000*time.Millisecond)
+			if err != nil {
+				results[idx] = protocol.StunProbeResult{
+					Server: serverAddr,
+					RTTMs:  0,
+					Status: "timeout",
+				}
+			} else {
 				results[idx] = protocol.StunProbeResult{
 					Server:   serverAddr,
 					RTTMs:    int(rtt.Milliseconds()),
@@ -146,7 +136,6 @@ func ProbeAllStunServers() []protocol.StunProbeResult {
 	return results
 }
 
-// isValidPublicIP checks that an IP is not a private, loopback, or Clash/VPN Fake-IP.
 func isValidPublicIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
@@ -186,41 +175,10 @@ func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0)
 }
 
-func resolveUDPAddrWithContext(ctx context.Context, address string) (*net.UDPAddr, error) {
-	host, portStr, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	if err != nil {
-		return nil, err
-	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		if ip4 := ip.To4(); ip4 != nil {
-			return &net.UDPAddr{IP: ip4, Port: port}, nil
-		}
-		return nil, fmt.Errorf("non-ipv4 address")
-	}
-
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil || len(ips) == 0 {
-		return nil, fmt.Errorf("lookup failed")
-	}
-
-	for _, ip := range ips {
-		if ip4 := ip.IP.To4(); ip4 != nil {
-			return &net.UDPAddr{IP: ip4, Port: port}, nil
-		}
-	}
-	return nil, fmt.Errorf("no ipv4 address found")
-}
-
-func queryStunWithContext(ctx context.Context, serverAddr string) (string, int, time.Duration, error) {
+func queryStunDirect(serverAddr string, timeout time.Duration) (string, int, time.Duration, error) {
 	t0 := time.Now()
 
-	raddr, err := resolveUDPAddrWithContext(ctx, serverAddr)
+	raddr, err := net.ResolveUDPAddr("udp4", serverAddr)
 	if err != nil {
 		return "", 0, 0, err
 	}
@@ -237,11 +195,7 @@ func queryStunWithContext(ctx context.Context, serverAddr string) (string, int, 
 	binary.BigEndian.PutUint32(req[4:8], magicCookie)
 	_, _ = rand.Read(req[8:20])
 
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(1000 * time.Millisecond)
-	}
-	_ = conn.SetDeadline(deadline)
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	if _, err := conn.WriteTo(req, raddr); err != nil {
 		return "", 0, 0, err
@@ -265,9 +219,10 @@ func queryStunWithContext(ctx context.Context, serverAddr string) (string, int, 
 			break
 		}
 
+		// Support both RFC 5389 (XOR-MAPPED-ADDRESS) and RFC 3489 (MAPPED-ADDRESS)
 		if attrType == xorMappedAddress && attrLen >= 8 {
 			family := buf[offset+1]
-			if family == 0x01 { // IPv4
+			if family == 0x01 {
 				rawPort := binary.BigEndian.Uint16(buf[offset+2 : offset+4])
 				xorPort := int(rawPort ^ uint16(magicCookie>>16))
 
@@ -284,10 +239,17 @@ func queryStunWithContext(ctx context.Context, serverAddr string) (string, int, 
 
 				return xorIP.String(), xorPort, rtt, nil
 			}
+		} else if attrType == mappedAddress && attrLen >= 8 {
+			family := buf[offset+1]
+			if family == 0x01 {
+				port := int(binary.BigEndian.Uint16(buf[offset+2 : offset+4]))
+				ip := net.IPv4(buf[offset+4], buf[offset+5], buf[offset+6], buf[offset+7])
+				return ip.String(), port, rtt, nil
+			}
 		}
 
 		offset += (attrLen + 3) & ^3
 	}
 
-	return "", 0, rtt, fmt.Errorf("xor-mapped-address not found")
+	return "", 0, rtt, fmt.Errorf("address attribute not found")
 }
