@@ -18,608 +18,587 @@ except ImportError:
     from gui.presets_data import GAME_PRESETS
     from gui.network_client import NetworkClient
 
-# Hardware Rack Color Scheme (Gunmetal, Anodized Steel, LED Indicators)
+# Swiss Brutalism & Bento Grid Palette (Linear / Raycast / Nothing OS Style)
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-CHASSIS_BG = "#0f1013"        # Deep rack background
-RACK_FACE = "#181a1f"         # Brushed gunmetal steel
-BAY_BG = "#1f2229"            # Module bay background
-BAY_HOVER = "#272a33"         # Hover state
-BORDER_METAL = "#333742"      # Machine screws and rack borders
-BORDER_LIGHT = "#444957"
-TEXT_ETCHED = "#9ba1b0"       # Laser-etched metallic label
-TEXT_BRIGHT = "#f3f5f8"       # White indicators
-TEXT_MONO = "#a0aec0"
+BG_COLOR = "#09090b"            # Deep pure obsidian
+BENTO_CARD = "#121215"          # Bento block surface
+BENTO_HOVER = "#1a1a1f"         # Bento hover surface
+BENTO_BORDER = "#27272a"        # 1px crisp structural border
+BENTO_BORDER_FOCUS = "#3f3f46"  # Highlighted border
 
-# LED Colors
-LED_GREEN_ON = "#22c55e"
-LED_GREEN_OFF = "#13331f"
-LED_AMBER_ON = "#f59e0b"
-LED_RED_ON = "#ef4444"
-LED_CYAN_ON = "#06b6d4"
+TEXT_MAIN = "#ffffff"           # Stark white
+TEXT_SECONDARY = "#a1a1aa"      # Neutral secondary
+TEXT_MUTED = "#52525b"          # Low-contrast metadata
 
-# LCD Display Colors
-LCD_BG = "#0a1318"
-LCD_BORDER = "#15333f"
-LCD_TEXT = "#38bdf8"
-LCD_SUB = "#0284c7"
+# Accent: Safety Orange & Emerald
+ACCENT_ORANGE = "#ff5500"
+ACCENT_ORANGE_HOVER = "#e04b00"
+ACCENT_GREEN = "#22c55e"
+ACCENT_RED = "#ef4444"
 
-FONT_MAIN = "Segoe UI"
+FONT_SANS = "Segoe UI"
 FONT_MONO = "Consolas"
 
 class LANForgeApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("LANFORGE // VIRTUAL NETWORK RACK SWITCH UNIT-24")
-        self.geometry("980x660")
-        self.minsize(880, 560)
-        self.configure(fg_color=CHASSIS_BG)
+        self.title("LANForge — P2P Virtual Network")
+        self.geometry("980x640")
+        self.minsize(860, 540)
+        self.configure(fg_color=BG_COLOR)
 
-        self.nick = f"UNIT_{int(time.time()) % 1000}"
+        self.nick = f"User_{int(time.time()) % 1000}"
         self.client = NetworkClient(server_url="ws://localhost:8787", nick=self.nick)
 
-        self.active_module = "patchbay"
+        self.active_tab = "overview"
         self.preset_filter = "Все"
-        self.led_state = True
 
-        self._setup_rack_chassis()
+        self._setup_layout()
         self._bind_client_events()
-        self._show_module("patchbay")
-        self._start_led_pulse()
+        self._show_tab("overview")
 
-    def _setup_rack_chassis(self):
+    def _setup_layout(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
         # ----------------------------------------------------
-        # TOP RACK HEADER (Master Switch, LCD Screen, Screw Heads)
+        # TOP NAVIGATION BAR (Linear / Raycast Style)
         # ----------------------------------------------------
-        self.header_panel = ctk.CTkFrame(self, fg_color=RACK_FACE, corner_radius=0, border_width=1, border_color=BORDER_METAL)
-        self.header_panel.grid(row=0, column=0, sticky="ew", padx=0, pady=0)
+        self.top_bar = ctk.CTkFrame(self, height=54, fg_color=BG_COLOR, corner_radius=0)
+        self.top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(12, 6))
 
-        h_inner = ctk.CTkFrame(self.header_panel, fg_color="transparent")
-        h_inner.pack(fill="x", padx=16, pady=10)
+        # Brand / Logo
+        brand_frame = ctk.CTkFrame(self.top_bar, fg_color="transparent")
+        brand_frame.pack(side="left")
 
-        # Left: Rack Model Label + Screws
-        brand_box = ctk.CTkFrame(h_inner, fg_color="transparent")
-        brand_box.pack(side="left")
-
-        lbl_unit = ctk.CTkLabel(
-            brand_box,
-            text="⊕ LANFORGE  //  SWITCH-24 MESH",
-            font=ctk.CTkFont(family=FONT_MONO, size=13, weight="bold"),
-            text_color=TEXT_BRIGHT
+        logo_lbl = ctk.CTkLabel(
+            brand_frame,
+            text="LANFORGE",
+            font=ctk.CTkFont(family=FONT_SANS, size=16, weight="bold"),
+            text_color=TEXT_MAIN
         )
-        lbl_unit.pack(anchor="w")
+        logo_lbl.pack(side="left")
 
-        lbl_spec = ctk.CTkLabel(
-            brand_box,
-            text="IEEE 802.3 VIR-LAN  |  SUBNET: 10.42.0.0/24  |  MTU: 1420",
-            font=ctk.CTkFont(family=FONT_MONO, size=10),
-            text_color=TEXT_ETCHED
+        dot_lbl = ctk.CTkLabel(
+            brand_frame,
+            text=".",
+            font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"),
+            text_color=ACCENT_ORANGE
         )
-        lbl_spec.pack(anchor="w")
+        dot_lbl.pack(side="left")
 
-        # Center: Master LCD Telemetry Screen
-        self.lcd_screen = ctk.CTkFrame(h_inner, fg_color=LCD_BG, corner_radius=6, border_width=1, border_color=LCD_BORDER)
-        self.lcd_screen.pack(side="left", padx=24, fill="y")
+        # Tab Selector Pills
+        self.tabs_bar = ctk.CTkFrame(self.top_bar, fg_color=BENTO_CARD, corner_radius=8, border_width=1, border_color=BENTO_BORDER)
+        self.tabs_bar.pack(side="left", padx=24)
 
-        self.lcd_label_1 = ctk.CTkLabel(
-            self.lcd_screen,
-            text="[SYS: READY]  LINK: ONLINE  |  PEERS: 0/16",
-            font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-            text_color=LCD_TEXT
-        )
-        self.lcd_label_1.pack(padx=14, pady=(4, 0), anchor="w")
+        self.tab_btns = {}
+        tabs = [
+            ("overview", "Обзор"),
+            ("games", "Игры"),
+            ("radar", "LAN Радар"),
+            ("chat", "Чат"),
+            ("diag", "Диагностика"),
+        ]
 
-        self.lcd_label_2 = ctk.CTkLabel(
-            self.lcd_screen,
-            text="ROOM: DISCONNECTED  |  DIRECT: STANDBY",
-            font=ctk.CTkFont(family=FONT_MONO, size=10),
-            text_color=LCD_SUB
-        )
-        self.lcd_label_2.pack(padx=14, pady=(0, 4), anchor="w")
+        for tab_id, label in tabs:
+            btn = ctk.CTkButton(
+                self.tabs_bar,
+                text=label,
+                height=28,
+                width=80,
+                corner_radius=6,
+                fg_color="transparent",
+                hover_color=BENTO_HOVER,
+                text_color=TEXT_MUTED,
+                font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
+                command=lambda t=tab_id: self._show_tab(t)
+            )
+            btn.pack(side="left", padx=2, pady=2)
+            self.tab_btns[tab_id] = btn
 
-        # Right: Master Hardware Actions
-        actions_box = ctk.CTkFrame(h_inner, fg_color="transparent")
-        actions_box.pack(side="right")
+        # Right Action Buttons
+        actions_frame = ctk.CTkFrame(self.top_bar, fg_color="transparent")
+        actions_frame.pack(side="right")
 
-        self.pwr_btn = ctk.CTkButton(
-            actions_box,
-            text="⊕ СОЗДАТЬ СЕТЬ",
+        self.create_top_btn = ctk.CTkButton(
+            actions_frame,
+            text="+ Создать сеть",
             height=30,
-            width=130,
-            corner_radius=4,
-            fg_color="#1e3a5f",
-            hover_color="#2563eb",
-            border_width=1,
-            border_color="#3b82f6",
-            font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
+            width=120,
+            corner_radius=6,
+            fg_color=ACCENT_ORANGE,
+            hover_color=ACCENT_ORANGE_HOVER,
+            font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
             text_color="#ffffff",
             command=self._open_create_dialog
         )
-        self.pwr_btn.pack(side="left", padx=4)
+        self.create_top_btn.pack(side="left", padx=(0, 8))
 
-        self.join_btn = ctk.CTkButton(
-            actions_box,
-            text="⤹ ВХОД ПО КОДУ",
+        self.join_top_btn = ctk.CTkButton(
+            actions_frame,
+            text="Войти по коду",
             height=30,
-            width=120,
-            corner_radius=4,
-            fg_color=BAY_BG,
-            hover_color=BAY_HOVER,
+            width=110,
+            corner_radius=6,
+            fg_color=BENTO_CARD,
+            hover_color=BENTO_HOVER,
             border_width=1,
-            border_color=BORDER_METAL,
-            font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-            text_color=TEXT_BRIGHT,
+            border_color=BENTO_BORDER,
+            font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
+            text_color=TEXT_MAIN,
             command=self._open_join_dialog
         )
-        self.join_btn.pack(side="left", padx=4)
+        self.join_top_btn.pack(side="left")
 
         # ----------------------------------------------------
-        # MODULE SWITCHER BAR (Rack Channel Selector)
+        # MAIN WORKSPACE CONTAINER
         # ----------------------------------------------------
-        self.module_bar = ctk.CTkFrame(self, height=36, fg_color=CHASSIS_BG, corner_radius=0, border_width=1, border_color=BORDER_METAL)
-        self.module_bar.grid(row=1, column=0, sticky="ew", padx=12, pady=(8, 0))
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        self.main_container.grid(row=1, column=0, sticky="nsew", padx=20, pady=(4, 16))
 
-        self.module_btns = {}
-        mods = [
-            ("patchbay", "MOD 01: ПАТЧ-ПАНЕЛЬ (СЕТЬ)"),
-            ("presets", "MOD 02: ИГРОВЫЕ ПОРТЫ"),
-            ("radar", "MOD 03: ПАКЕТНЫЙ СНИФФЕР (РАДАР)"),
-            ("chat", "MOD 04: ТЕЛЕТАЙП (ЧАТ)"),
-            ("diag", "MOD 05: ТЕЛЕМЕТРИЯ NAT/UPNP"),
-        ]
-
-        for mod_id, title in mods:
-            btn = ctk.CTkButton(
-                self.module_bar,
-                text=title,
-                height=28,
-                corner_radius=4,
-                fg_color="transparent",
-                hover_color=BAY_BG,
-                text_color=TEXT_ETCHED,
-                font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-                command=lambda m=mod_id: self._show_module(m)
-            )
-            btn.pack(side="left", padx=3, pady=3)
-            self.module_btns[mod_id] = btn
-
-        # ----------------------------------------------------
-        # MAIN RACK BAY WORKSPACE
-        # ----------------------------------------------------
-        self.main_bay = ctk.CTkFrame(self, fg_color=BAY_BG, corner_radius=6, border_width=1, border_color=BORDER_METAL)
-        self.main_bay.grid(row=2, column=0, sticky="nsew", padx=12, pady=(8, 12))
-
-    def _show_module(self, mod_id):
-        self.active_module = mod_id
-        for m, btn in self.module_btns.items():
-            if m == mod_id:
-                btn.configure(fg_color=BAY_BG, text_color=TEXT_BRIGHT, border_width=1, border_color=BORDER_LIGHT)
+    def _show_tab(self, tab_id):
+        self.active_tab = tab_id
+        for t, btn in self.tab_btns.items():
+            if t == tab_id:
+                btn.configure(fg_color="#202024", text_color=TEXT_MAIN)
             else:
-                btn.configure(fg_color="transparent", text_color=TEXT_ETCHED, border_width=0)
+                btn.configure(fg_color="transparent", text_color=TEXT_MUTED)
 
-        for widget in self.main_bay.winfo_children():
+        for widget in self.main_container.winfo_children():
             widget.destroy()
 
-        if mod_id == "patchbay":
-            self._render_patchbay()
-        elif mod_id == "presets":
-            self._render_presets()
-        elif mod_id == "radar":
+        if tab_id == "overview":
+            self._render_overview()
+        elif tab_id == "games":
+            self._render_games()
+        elif tab_id == "radar":
             self._render_radar()
-        elif mod_id == "chat":
+        elif tab_id == "chat":
             self._render_chat()
-        elif mod_id == "diag":
+        elif tab_id == "diag":
             self._render_diag()
 
     # ----------------------------------------------------
-    # MODULE 1: ETHERNET PATCH BAY (PHYSICAL PORTS)
+    # TAB: OVERVIEW (Bento Grid Architecture)
     # ----------------------------------------------------
-    def _render_patchbay(self):
+    def _render_overview(self):
+        # 2-Column Bento Grid
+        self.main_container.grid_columnconfigure(0, weight=3)
+        self.main_container.grid_columnconfigure(1, weight=2)
+        self.main_container.grid_rowconfigure(0, weight=1)
+
+        # -----------------
+        # LEFT BENTO: Main Network Room Tile
+        # -----------------
+        left_bento = ctk.CTkFrame(self.main_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
+        left_bento.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=0)
+
+        lb_pad = ctk.CTkFrame(left_bento, fg_color="transparent")
+        lb_pad.pack(fill="both", expand=True, padx=20, pady=20)
+
         if not self.client.room:
-            standby = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-            standby.pack(expand=True, fill="both", padx=30, pady=30)
-
+            # Empty / Standby State
+            ctk.CTkLabel(lb_pad, text="ВИРТУАЛЬНАЯ СЕТЬ", font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"), text_color=TEXT_MUTED).pack(anchor="w")
+            ctk.CTkLabel(lb_pad, text="Сеть не подключена", font=ctk.CTkFont(family=FONT_SANS, size=24, weight="bold"), text_color=TEXT_MAIN).pack(anchor="w", pady=(4, 8))
             ctk.CTkLabel(
-                standby,
-                text="[ СЕТЕВОЙ МОДУЛЬ В РЕЖИМЕ ОЖИДАНИЯ ]",
-                font=ctk.CTkFont(family=FONT_MONO, size=15, weight="bold"),
-                text_color=TEXT_ETCHED
-            ).pack(pady=(40, 8))
+                lb_pad,
+                text="Создайте комнату для совместной игры или введите 6-значный код комнаты хоста для подключения.",
+                font=ctk.CTkFont(family=FONT_SANS, size=12),
+                text_color=TEXT_SECONDARY,
+                wraplength=420,
+                justify="left"
+            ).pack(anchor="w", pady=(0, 24))
 
-            ctk.CTkLabel(
-                standby,
-                text="Нет активного виртуального канала. Создайте комнату на панели или введите 6-значный код хоста.",
-                font=ctk.CTkFont(family=FONT_MAIN, size=12),
-                text_color=TEXT_MONO
-            ).pack(pady=(0, 24))
-
-            btn_box = ctk.CTkFrame(standby, fg_color="transparent")
-            btn_box.pack()
+            actions_box = ctk.CTkFrame(lb_pad, fg_color="transparent")
+            actions_box.pack(anchor="w")
 
             ctk.CTkButton(
-                btn_box,
-                text="⊕ ИНИЦИАЛИЗИРОВАТЬ СЕТЬ (ХОСТ)",
-                width=240,
-                height=38,
-                corner_radius=4,
-                fg_color="#1e3a5f",
-                hover_color="#2563eb",
-                font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
+                actions_box,
+                text="Создать комнату",
+                height=36,
+                width=150,
+                corner_radius=8,
+                fg_color=ACCENT_ORANGE,
+                hover_color=ACCENT_ORANGE_HOVER,
+                font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
                 command=self._open_create_dialog
-            ).pack(side="left", padx=8)
+            ).pack(side="left", padx=(0, 10))
 
             ctk.CTkButton(
-                btn_box,
-                text="⤹ ПОДКЛЮЧИТЬ ПОРТ К СЕТИ",
-                width=220,
-                height=38,
-                corner_radius=4,
-                fg_color=RACK_FACE,
-                hover_color=BAY_HOVER,
+                actions_box,
+                text="Войти по коду",
+                height=36,
+                width=140,
+                corner_radius=8,
+                fg_color="#1e1e24",
+                hover_color="#27272e",
                 border_width=1,
-                border_color=BORDER_METAL,
-                font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
+                border_color=BENTO_BORDER,
+                font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
+                text_color=TEXT_MAIN,
                 command=self._open_join_dialog
-            ).pack(side="left", padx=8)
-            return
-
-        room = self.client.room
-        host_ip = "10.42.0.1"
-
-        # Active Patch Panel Banner
-        p_top = ctk.CTkFrame(self.main_bay, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
-        p_top.pack(fill="x", padx=10, pady=10)
-
-        pt_pad = ctk.CTkFrame(p_top, fg_color="transparent")
-        pt_pad.pack(fill="x", padx=12, pady=8)
-
-        room_title = f"КАНАЛ: {room.get('name')}  |  КОД: {room.get('code')}"
-        ctk.CTkLabel(pt_pad, text=room_title, font=ctk.CTkFont(family=FONT_MONO, size=13, weight="bold"), text_color=TEXT_BRIGHT).pack(side="left")
-
-        ctk.CTkButton(
-            pt_pad,
-            text="📋 КОПИРОВАТЬ КОД",
-            height=24,
-            width=130,
-            corner_radius=3,
-            fg_color="#1e3a5f",
-            hover_color="#2563eb",
-            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
-            command=lambda: self._copy(room.get('code'), "Код скопирован")
-        ).pack(side="left", padx=12)
-
-        ctk.CTkButton(
-            pt_pad,
-            text="ОТКЛЮЧИТЬ КАНАЛ",
-            height=24,
-            width=120,
-            corner_radius=3,
-            fg_color="#451a1a",
-            hover_color="#dc2626",
-            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
-            command=self.client.leave_room
-        ).pack(side="right")
-
-        # Direct Host IP Bar
-        host_bar = ctk.CTkFrame(self.main_bay, fg_color=LCD_BG, corner_radius=4, border_width=1, border_color=LCD_BORDER)
-        host_bar.pack(fill="x", padx=10, pady=(0, 10))
-
-        hb_pad = ctk.CTkFrame(host_bar, fg_color="transparent")
-        hb_pad.pack(fill="x", padx=12, pady=6)
-
-        direct_connect_str = f"{host_ip}:25565"
-        ctk.CTkLabel(
-            hb_pad,
-            text=f"★ СЕТЕВОЙ АДРЕС ДЛЯ ПОДКЛЮЧЕНИЯ В ИГРЕ:  {direct_connect_str}",
-            font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-            text_color=LCD_TEXT
-        ).pack(side="left")
-
-        ctk.CTkButton(
-            hb_pad,
-            text="КОПИРОВАТЬ АДРЕС",
-            height=20,
-            width=130,
-            corner_radius=2,
-            fg_color="#15333f",
-            hover_color="#0284c7",
-            text_color="#ffffff",
-            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
-            command=lambda: self._copy(direct_connect_str, "Адрес скопирован")
-        ).pack(side="right")
-
-        # Physical Ports Bay Header
-        ctk.CTkLabel(
-            self.main_bay,
-            text="ПАТЧ-ПАНЕЛЬ СЛОТОВ // RJ-45 VIRTUAL PORTS:",
-            font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-            text_color=TEXT_ETCHED
-        ).pack(anchor="w", padx=12, pady=(2, 4))
-
-        # Ports Grid Container
-        scroll_ports = ctk.CTkScrollableFrame(self.main_bay, fg_color="transparent")
-        scroll_ports.pack(fill="both", expand=True, padx=8, pady=(0, 6))
-
-        peers = room.get("peers", [])
-        total_slots = max(len(peers) + 2, 8)
-
-        for slot_idx in range(total_slots):
-            is_active = slot_idx < len(peers)
-            peer = peers[slot_idx] if is_active else None
-
-            port_card = ctk.CTkFrame(scroll_ports, fg_color=RACK_FACE if is_active else "#14161a", corner_radius=4, border_width=1, border_color=BORDER_METAL if is_active else "#20232a")
-            port_card.pack(fill="x", pady=2)
-
-            pc_pad = ctk.CTkFrame(port_card, fg_color="transparent")
-            pc_pad.pack(fill="x", padx=10, pady=6)
-
-            # Port Number Tag
-            port_num_str = f"PORT {slot_idx+1:02d}"
-            ctk.CTkLabel(
-                pc_pad,
-                text=port_num_str,
-                font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-                text_color=TEXT_BRIGHT if is_active else TEXT_ETCHED,
-                width=65,
-                anchor="w"
             ).pack(side="left")
+        else:
+            # Active Room State
+            room = self.client.room
+            host_ip = "10.42.0.1"
 
-            if is_active:
-                led_link = "● LNK"
-                led_act = "● ACT" if self.led_state else "○ ACT"
+            # Header info
+            top_meta = ctk.CTkFrame(lb_pad, fg_color="transparent")
+            top_meta.pack(fill="x", pady=(0, 6))
 
-                ctk.CTkLabel(pc_pad, text=led_link, font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=LED_GREEN_ON).pack(side="left", padx=4)
-                ctk.CTkLabel(pc_pad, text=led_act, font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=LED_AMBER_ON).pack(side="left", padx=4)
+            ctk.CTkLabel(top_meta, text="АКТИВНАЯ СЕТЬ", font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"), text_color=TEXT_MUTED).pack(side="left")
 
-                nick_title = peer.get("nick", "UNIT")
+            ctk.CTkButton(
+                top_meta,
+                text="Отключиться",
+                height=22,
+                width=90,
+                corner_radius=4,
+                fg_color="#27272a",
+                hover_color=ACCENT_RED,
+                font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"),
+                text_color=TEXT_MAIN,
+                command=self.client.leave_room
+            ).pack(side="right")
+
+            # Room Title + Code Pill
+            title_row = ctk.CTkFrame(lb_pad, fg_color="transparent")
+            title_row.pack(fill="x", pady=(0, 12))
+
+            ctk.CTkLabel(title_row, text=room.get("name", "Комната"), font=ctk.CTkFont(family=FONT_SANS, size=20, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
+
+            code_str = room.get("code", "LAN-XXXX")
+            ctk.CTkButton(
+                title_row,
+                text=f"{code_str} 📋",
+                height=26,
+                width=100,
+                corner_radius=6,
+                fg_color="#1e1e24",
+                hover_color="#27272e",
+                border_width=1,
+                border_color=BENTO_BORDER,
+                font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
+                text_color=ACCENT_ORANGE,
+                command=lambda: self._copy(code_str, "Код скопирован")
+            ).pack(side="left", padx=12)
+
+            # Direct Connect String Block
+            connect_box = ctk.CTkFrame(lb_pad, fg_color="#18181c", corner_radius=8, border_width=1, border_color=BENTO_BORDER)
+            connect_box.pack(fill="x", pady=(0, 14))
+
+            cb_pad = ctk.CTkFrame(connect_box, fg_color="transparent")
+            cb_pad.pack(fill="x", padx=12, pady=8)
+
+            direct_addr = f"{host_ip}:25565"
+            ctk.CTkLabel(cb_pad, text=f"Адрес хоста в игре:  {direct_addr}", font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
+
+            ctk.CTkButton(
+                cb_pad,
+                text="Копировать адрес",
+                height=24,
+                width=130,
+                corner_radius=4,
+                fg_color="#27272a",
+                hover_color=BENTO_HOVER,
+                font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
+                text_color=TEXT_MAIN,
+                command=lambda: self._copy(direct_addr, "Адрес скопирован")
+            ).pack(side="right")
+
+            # Peers List Header
+            ctk.CTkLabel(
+                lb_pad,
+                text=f"Участники ({len(room.get('peers', []))}/{room.get('maxPeers', 16)}):",
+                font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"),
+                text_color=TEXT_MUTED
+            ).pack(anchor="w", pady=(0, 6))
+
+            # Scrollable Peers
+            scroll_peers = ctk.CTkScrollableFrame(lb_pad, fg_color="transparent")
+            scroll_peers.pack(fill="both", expand=True)
+
+            for peer in room.get("peers", []):
+                p_row = ctk.CTkFrame(scroll_peers, fg_color="#18181c", corner_radius=6, border_width=1, border_color=BENTO_BORDER)
+                p_row.pack(fill="x", pady=2)
+
+                pr_pad = ctk.CTkFrame(p_row, fg_color="transparent")
+                pr_pad.pack(fill="x", padx=10, pady=6)
+
+                # Online Indicator
+                ctk.CTkLabel(pr_pad, text="●", font=ctk.CTkFont(size=9), text_color=ACCENT_GREEN).pack(side="left", padx=(0, 6))
+
+                nick_txt = peer.get("nick", "User")
                 if peer.get("isHost"):
-                    nick_title += " [HOST / MESH CONTROLLER]"
+                    nick_txt += " (Хост)"
                 if self.client.you and peer.get("id") == self.client.you.get("id"):
-                    nick_title += " (YOU)"
+                    nick_txt += " (Вы)"
 
-                ctk.CTkLabel(
-                    pc_pad,
-                    text=nick_title,
-                    font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"),
-                    text_color=TEXT_BRIGHT
+                ctk.CTkLabel(pr_pad, text=nick_txt, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
+
+                # IP Tag Button
+                v_ip = peer.get("virtualIp", "")
+                ctk.CTkButton(
+                    pr_pad,
+                    text=f"{v_ip} 📋",
+                    height=20,
+                    width=100,
+                    corner_radius=4,
+                    fg_color="#202024",
+                    hover_color=BENTO_HOVER,
+                    font=ctk.CTkFont(family=FONT_MONO, size=10),
+                    text_color=TEXT_SECONDARY,
+                    command=lambda target_ip=v_ip: self._copy(target_ip, f"IP {target_ip} скопирован")
                 ).pack(side="left", padx=12)
 
-                v_ip = peer.get("virtualIp", "10.42.0.X")
-                ctk.CTkButton(
-                    pc_pad,
-                    text=f"{v_ip} 📋",
-                    height=22,
-                    width=120,
-                    corner_radius=3,
-                    fg_color=BAY_BG,
-                    hover_color=BAY_HOVER,
-                    border_width=1,
-                    border_color=BORDER_METAL,
-                    text_color=LCD_TEXT,
-                    font=ctk.CTkFont(family=FONT_MONO, size=11),
-                    command=lambda target_ip=v_ip: self._copy(target_ip, f"IP {target_ip} скопирован")
-                ).pack(side="left", padx=10)
-
+                # Latency Badge
                 ping = peer.get("pingMs", 0)
-                vu_str, vu_col = self._get_vu_meter(ping)
-                ctk.CTkLabel(
-                    pc_pad,
-                    text=vu_str,
-                    font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
-                    text_color=vu_col
-                ).pack(side="right")
-            else:
-                ctk.CTkLabel(
-                    pc_pad,
-                    text="○ LNK  ○ ACT  //  СВОБОДНЫЙ ПОРТ ДЛЯ ИГРОКА (STANDBY)",
-                    font=ctk.CTkFont(family=FONT_MONO, size=10),
-                    text_color="#474d5b"
-                ).pack(side="left", padx=6)
+                p_str = f"{ping} ms" if ping > 0 else "< 1 ms"
+                p_col = ACCENT_GREEN if ping < 50 else (ACCENT_ORANGE if ping < 100 else ACCENT_RED)
+                ctk.CTkLabel(pr_pad, text=p_str, font=ctk.CTkFont(family=FONT_MONO, size=11), text_color=p_col).pack(side="right")
 
-    def _get_vu_meter(self, ping):
-        if ping <= 0:
-            return "[■■■■■] <1ms", LED_GREEN_ON
-        elif ping < 35:
-            return f"[■■■■□] {ping}ms", LED_GREEN_ON
-        elif ping < 80:
-            return f"[■■■□□] {ping}ms", LED_AMBER_ON
-        else:
-            return f"[■□□□□] {ping}ms", LED_RED_ON
+        # -----------------
+        # RIGHT BENTO TILES (Sidebar Metrics)
+        # -----------------
+        right_container = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        right_container.grid(row=0, column=1, sticky="nsew", padx=(10, 0), pady=0)
+        right_container.grid_rowconfigure(0, weight=1)
+        right_container.grid_rowconfigure(1, weight=1)
+        right_container.grid_rowconfigure(2, weight=1)
+        right_container.grid_columnconfigure(0, weight=1)
+
+        # Tile 1: Your Virtual IP
+        t1 = ctk.CTkFrame(right_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
+        t1.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
+
+        t1_pad = ctk.CTkFrame(t1, fg_color="transparent")
+        t1_pad.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(t1_pad, text="ВАШ ВИРТУАЛЬНЫЙ IP", font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"), text_color=TEXT_MUTED).pack(anchor="w")
+        
+        my_ip = self.client.you.get("virtualIp", "10.42.0.1") if (self.client.room and self.client.you) else "10.42.0.X"
+        ip_display = ctk.CTkLabel(t1_pad, text=my_ip, font=ctk.CTkFont(family=FONT_MONO, size=22, weight="bold"), text_color=TEXT_MAIN)
+        ip_display.pack(anchor="w", pady=(2, 4))
+
+        ctk.CTkButton(
+            t1_pad,
+            text="Копировать IP",
+            height=22,
+            width=110,
+            corner_radius=4,
+            fg_color="#1e1e24",
+            hover_color=BENTO_HOVER,
+            border_width=1,
+            border_color=BENTO_BORDER,
+            font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"),
+            text_color=TEXT_SECONDARY,
+            command=lambda: self._copy(my_ip, "IP скопирован")
+        ).pack(anchor="w")
+
+        # Tile 2: Latency & Link Quality
+        t2 = ctk.CTkFrame(right_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
+        t2.grid(row=1, column=0, sticky="nsew", pady=4)
+
+        t2_pad = ctk.CTkFrame(t2, fg_color="transparent")
+        t2_pad.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(t2_pad, text="ЗАДЕРЖКА СЕТИ (RTT)", font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"), text_color=TEXT_MUTED).pack(anchor="w")
+        
+        ping_val = self.client.last_ping_rtt
+        ping_display_str = f"{ping_val} ms" if ping_val > 0 else "< 1 ms"
+        ctk.CTkLabel(t2_pad, text=ping_display_str, font=ctk.CTkFont(family=FONT_MONO, size=22, weight="bold"), text_color=ACCENT_GREEN if ping_val < 50 else ACCENT_ORANGE).pack(anchor="w", pady=(2, 2))
+
+        ctk.CTkLabel(t2_pad, text="● Прямой P2P туннель активен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(anchor="w")
+
+        # Tile 3: Router & NAT Info
+        t3 = ctk.CTkFrame(right_container, fg_color=BENTO_CARD, corner_radius=12, border_width=1, border_color=BENTO_BORDER)
+        t3.grid(row=2, column=0, sticky="nsew", pady=(8, 0))
+
+        t3_pad = ctk.CTkFrame(t3, fg_color="transparent")
+        t3_pad.pack(fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(t3_pad, text="ШЛЮЗ И UPNP МАРШРУТИЗАЦИЯ", font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"), text_color=TEXT_MUTED).pack(anchor="w")
+        ctk.CTkLabel(t3_pad, text="Restricted Cone NAT", font=ctk.CTkFont(family=FONT_SANS, size=14, weight="bold"), text_color=TEXT_MAIN).pack(anchor="w", pady=(2, 2))
+        ctk.CTkLabel(t3_pad, text="UPnP IGD авто-проброс портов включен", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(anchor="w")
 
     # ----------------------------------------------------
-    # MODULE 2: GAME PRESET SELECTOR (CHANNELS)
+    # TAB: GAMES (Bento Game Catalog)
     # ----------------------------------------------------
-    def _render_presets(self):
-        title_box = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        title_box.pack(fill="x", padx=12, pady=(10, 6))
+    def _render_games(self):
+        header = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(
-            title_box,
-            text="ИГРОВЫЕ КАНАЛЫ И ПРЕСЕТЫ ПОРТОВ // RACK CHANNELS:",
-            font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
-            text_color=TEXT_BRIGHT
-        ).pack(side="left")
+        ctk.CTkLabel(header, text="Каталог игр", font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
-        f_bar = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        f_bar.pack(fill="x", padx=12, pady=(0, 8))
+        # Filter Chips
+        f_box = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        f_box.pack(fill="x", pady=(0, 12))
 
         cats = ["Все", "Песочницы", "Шутеры", "Выживание", "Классика"]
         for cat in cats:
             btn = ctk.CTkButton(
-                f_bar,
+                f_box,
                 text=cat,
-                height=24,
+                height=26,
                 width=80,
-                corner_radius=3,
-                fg_color=RACK_FACE if self.preset_filter == cat else "transparent",
-                hover_color=BAY_HOVER,
-                border_width=1 if self.preset_filter == cat else 0,
-                border_color=BORDER_METAL,
-                text_color=TEXT_BRIGHT if self.preset_filter == cat else TEXT_ETCHED,
-                font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
+                corner_radius=6,
+                fg_color="#202024" if self.preset_filter == cat else "transparent",
+                hover_color=BENTO_HOVER,
+                text_color=TEXT_MAIN if self.preset_filter == cat else TEXT_MUTED,
+                font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
                 command=lambda c=cat: self._set_preset_filter(c)
             )
             btn.pack(side="left", padx=2)
 
-        scroll = ctk.CTkScrollableFrame(self.main_bay, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        scroll = ctk.CTkScrollableFrame(self.main_container, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
 
         filtered = [
             p for p in GAME_PRESETS
             if (self.preset_filter == "Все" or p["category"] == self.preset_filter)
         ]
 
-        for idx, p in enumerate(filtered, start=1):
-            row = ctk.CTkFrame(scroll, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
-            row.pack(fill="x", pady=2)
+        for p in filtered:
+            card = ctk.CTkFrame(scroll, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
+            card.pack(fill="x", pady=4)
 
-            r_pad = ctk.CTkFrame(row, fg_color="transparent")
-            r_pad.pack(fill="x", padx=10, pady=6)
+            c_pad = ctk.CTkFrame(card, fg_color="transparent")
+            c_pad.pack(fill="x", padx=14, pady=10)
 
-            ch_str = f"CH {idx:02d}"
-            ctk.CTkLabel(r_pad, text=ch_str, font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), text_color=LCD_TEXT, width=45, anchor="w").pack(side="left")
+            # Top Line
+            r1 = ctk.CTkFrame(c_pad, fg_color="transparent")
+            r1.pack(fill="x")
 
-            ctk.CTkLabel(r_pad, text=p["name"], font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), text_color=TEXT_BRIGHT).pack(side="left")
+            ctk.CTkLabel(r1, text=p["name"], font=ctk.CTkFont(family=FONT_SANS, size=13, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
-            port_label = f"[{p['protocol']} {p['default_port']}]"
-            ctk.CTkLabel(r_pad, text=port_label, font=ctk.CTkFont(family=FONT_MONO, size=10), text_color=TEXT_ETCHED).pack(side="left", padx=10)
+            port_pill = f"{p['protocol']} {p['default_port']}"
+            ctk.CTkLabel(r1, text=port_pill, font=ctk.CTkFont(family=FONT_MONO, size=11), text_color=TEXT_MUTED).pack(side="left", padx=12)
 
             ctk.CTkButton(
-                r_pad,
-                text="ПРИВЯЗАТЬ СЕТЬ",
-                height=22,
+                r1,
+                text="Создать комнату",
+                height=26,
                 width=120,
-                corner_radius=3,
-                fg_color="#1e3a5f",
-                hover_color="#2563eb",
-                font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
+                corner_radius=6,
+                fg_color=ACCENT_ORANGE,
+                hover_color=ACCENT_ORANGE_HOVER,
+                font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
                 command=lambda preset=p: self._open_create_dialog(preset)
             ).pack(side="right")
 
-            ctk.CTkLabel(r_pad, text=p["hint"], font=ctk.CTkFont(family=FONT_MONO, size=10), text_color="#64748b").pack(side="right", padx=10)
+            # Description
+            ctk.CTkLabel(c_pad, text=p["description"], font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED, wraplength=650, justify="left").pack(anchor="w", pady=(4, 2))
+            ctk.CTkLabel(c_pad, text=f"Инструкция: {p['hint']}", font=ctk.CTkFont(family=FONT_SANS, size=10), text_color=TEXT_MUTED).pack(anchor="w")
 
     def _set_preset_filter(self, cat):
         self.preset_filter = cat
-        self._show_module("presets")
+        self._show_tab("games")
 
     # ----------------------------------------------------
-    # MODULE 3: PACKET SNIFFER (LAN RADAR)
+    # TAB: RADAR (LAN Discovery)
     # ----------------------------------------------------
     def _render_radar(self):
-        title_box = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        title_box.pack(fill="x", padx=12, pady=(10, 6))
+        title = ctk.CTkLabel(self.main_container, text="LAN Радар (Автопоиск серверов)", font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"), text_color=TEXT_MAIN)
+        title.pack(anchor="w", pady=(0, 4))
 
-        ctk.CTkLabel(
-            title_box,
-            text="ПАКЕТНЫЙ СНИФФЕР // UDP 255.255.255.255 DISCOVERY MONITOR:",
-            font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
-            text_color=TEXT_BRIGHT
-        ).pack(side="left")
+        desc = ctk.CTkLabel(
+            self.main_container,
+            text="LANForge перехватывает широковещательные UDP-пакеты игр (Minecraft, Source) и ретранслирует их всем участникам комнаты.",
+            font=ctk.CTkFont(family=FONT_SANS, size=11),
+            text_color=TEXT_MUTED
+        )
+        desc.pack(anchor="w", pady=(0, 12))
 
-        sb = ctk.CTkFrame(self.main_bay, fg_color=LCD_BG, corner_radius=4, border_width=1, border_color=LCD_BORDER)
-        sb.pack(fill="x", padx=12, pady=(0, 10))
+        # Status Strip
+        sb = ctk.CTkFrame(self.main_container, fg_color=BENTO_CARD, corner_radius=8, border_width=1, border_color=BENTO_BORDER)
+        sb.pack(fill="x", pady=(0, 12))
 
         sb_pad = ctk.CTkFrame(sb, fg_color="transparent")
-        sb_pad.pack(fill="x", padx=10, pady=6)
+        sb_pad.pack(fill="x", padx=12, pady=8)
 
-        ctk.CTkLabel(
-            sb_pad,
-            text="[LISTENER: SOCKET OPEN 0.0.0.0:4445]  |  REPEATER: BROADCAST MESH ACTIVE",
-            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
-            text_color=LED_GREEN_ON
-        ).pack(side="left")
+        ctk.CTkLabel(sb_pad, text="● Сканирование широковещательных пакетов активно", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=ACCENT_GREEN).pack(side="left")
 
-        scroll = ctk.CTkScrollableFrame(self.main_bay, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        # Discovered List
+        scroll = ctk.CTkScrollableFrame(self.main_container, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
 
         if not self.client.discovered_games:
-            ctk.CTkLabel(
-                scroll,
-                text="[ ПАКЕТОВ LAN-СЕРВЕРОВ НЕ ЗАФИКСИРОВАНО ]\nОткройте мир для сети в игре хоста (Minecraft/Source) — пакеты захватятся автоматически.",
-                font=ctk.CTkFont(family=FONT_MONO, size=11),
-                text_color=TEXT_ETCHED
-            ).pack(pady=35)
+            ctk.CTkLabel(scroll, text="Активных LAN-миров в сети пока не обнаружено.\nОткройте мир для сети в Minecraft или запустите локальный сервер.", font=ctk.CTkFont(family=FONT_SANS, size=12), text_color=TEXT_MUTED).pack(pady=30)
         else:
             for g in self.client.discovered_games:
-                card = ctk.CTkFrame(scroll, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
-                card.pack(fill="x", pady=2)
+                card = ctk.CTkFrame(scroll, fg_color=BENTO_CARD, corner_radius=8, border_width=1, border_color=BENTO_BORDER)
+                card.pack(fill="x", pady=3)
 
                 c_pad = ctk.CTkFrame(card, fg_color="transparent")
-                c_pad.pack(fill="x", padx=10, pady=6)
+                c_pad.pack(fill="x", padx=12, pady=8)
 
-                info_str = f"CAPTURED: {g['name']}  |  SRC: {g['host_ip']}:{g['port']}"
-                ctk.CTkLabel(c_pad, text=info_str, font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), text_color=LCD_TEXT).pack(side="left")
+                info_str = f"{g['name']}  |  {g['host_ip']}:{g['port']}"
+                ctk.CTkLabel(c_pad, text=info_str, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), text_color=TEXT_MAIN).pack(side="left")
 
                 ctk.CTkButton(
                     c_pad,
-                    text="КОПИРОВАТЬ IP:PORT",
-                    height=20,
+                    text="Копировать адрес",
+                    height=22,
                     width=130,
-                    corner_radius=2,
-                    fg_color="#1e3a5f",
-                    hover_color="#2563eb",
-                    font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
+                    corner_radius=4,
+                    fg_color="#1e1e24",
+                    hover_color=BENTO_HOVER,
+                    font=ctk.CTkFont(family=FONT_SANS, size=10, weight="bold"),
                     command=lambda target=f"{g['host_ip']}:{g['port']}": self._copy(target, "Адрес скопирован")
                 ).pack(side="right")
 
     # ----------------------------------------------------
-    # MODULE 4: TELETYPE COMM (ROOM CHAT)
+    # TAB: CHAT (Linear / Raycast Style)
     # ----------------------------------------------------
     def _render_chat(self):
-        title_box = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        title_box.pack(fill="x", padx=12, pady=(10, 6))
+        title = ctk.CTkLabel(self.main_container, text="Чат комнаты", font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"), text_color=TEXT_MAIN)
+        title.pack(anchor="w", pady=(0, 10))
 
-        ctk.CTkLabel(
-            title_box,
-            text="ТЕЛЕТАЙП КАНАЛА СВЯЗИ // COMM LINK TELETYPE:",
-            font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
-            text_color=TEXT_BRIGHT
-        ).pack(side="left")
-
-        self.chat_feed = ctk.CTkScrollableFrame(self.main_bay, fg_color=LCD_BG, corner_radius=4, border_width=1, border_color=LCD_BORDER)
-        self.chat_feed.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        # Message Feed
+        self.chat_feed = ctk.CTkScrollableFrame(self.main_container, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
+        self.chat_feed.pack(fill="both", expand=True, pady=(0, 10))
 
         if not self.client.chat_history:
-            ctk.CTkLabel(self.chat_feed, text="[ ТЕЛЕТАЙП ЧИСТ // ЖДУ СООБЩЕНИЙ В КАНАЛ ]", font=ctk.CTkFont(family=FONT_MONO, size=10), text_color="#1e4e63").pack(pady=25)
+            ctk.CTkLabel(self.chat_feed, text="Сообщений пока нет.", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(pady=25)
         else:
             for msg in self.client.chat_history:
                 row = ctk.CTkFrame(self.chat_feed, fg_color="transparent")
-                row.pack(fill="x", padx=6, pady=1)
+                row.pack(fill="x", padx=10, pady=2)
 
-                t_str = time.strftime("%H:%M:%S", time.localtime(msg.get("timestamp", 0) / 1000))
-                ctk.CTkLabel(row, text=f"[{t_str}] <{msg.get('fromNick', 'UNIT')}>", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=LCD_TEXT).pack(side="left", padx=(0, 6))
-                ctk.CTkLabel(row, text=msg.get("text", ""), font=ctk.CTkFont(family=FONT_MONO, size=10), text_color=TEXT_BRIGHT).pack(side="left")
+                t_str = time.strftime("%H:%M", time.localtime(msg.get("timestamp", 0) / 1000))
+                ctk.CTkLabel(row, text=f"[{t_str}] {msg.get('fromNick', 'User')}:", font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"), text_color=ACCENT_ORANGE).pack(side="left", padx=(0, 6))
+                ctk.CTkLabel(row, text=msg.get("text", ""), font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MAIN).pack(side="left")
 
-        in_row = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        in_row.pack(fill="x", padx=12, pady=(0, 10))
+        # Input Row
+        in_row = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        in_row.pack(fill="x")
 
         self.chat_entry = ctk.CTkEntry(
             in_row,
-            placeholder_text="> Введите сообщение в канал связи...",
-            height=30,
-            corner_radius=3,
-            fg_color=RACK_FACE,
-            border_color=BORDER_METAL,
-            text_color=TEXT_BRIGHT,
-            font=ctk.CTkFont(family=FONT_MONO, size=11)
+            placeholder_text="Введите сообщение...",
+            height=34,
+            corner_radius=8,
+            fg_color=BENTO_CARD,
+            border_color=BENTO_BORDER,
+            text_color=TEXT_MAIN,
+            font=ctk.CTkFont(family=FONT_SANS, size=11)
         )
-        self.chat_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self.chat_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.chat_entry.bind("<Return>", lambda e: self._send_chat())
 
         send_btn = ctk.CTkButton(
             in_row,
-            text="ОТПРАВИТЬ",
-            height=30,
-            width=100,
-            corner_radius=3,
-            fg_color="#1e3a5f",
-            hover_color="#2563eb",
-            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
+            text="Отправить",
+            height=34,
+            width=90,
+            corner_radius=8,
+            fg_color=ACCENT_ORANGE,
+            hover_color=ACCENT_ORANGE_HOVER,
+            font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
             command=self._send_chat
         )
         send_btn.pack(side="right")
@@ -631,100 +610,91 @@ class LANForgeApp(ctk.CTk):
             self.chat_entry.delete(0, "end")
 
     # ----------------------------------------------------
-    # MODULE 5: TELEMETRY (DIAGNOSTICS)
+    # TAB: DIAGNOSTICS
     # ----------------------------------------------------
     def _render_diag(self):
-        title_box = ctk.CTkFrame(self.main_bay, fg_color="transparent")
-        title_box.pack(fill="x", padx=12, pady=(10, 8))
+        title = ctk.CTkLabel(self.main_container, text="Сетевая диагностика", font=ctk.CTkFont(family=FONT_SANS, size=18, weight="bold"), text_color=TEXT_MAIN)
+        title.pack(anchor="w", pady=(0, 12))
 
-        ctk.CTkLabel(
-            title_box,
-            text="СЕТЕВАЯ ТЕЛЕМЕТРИЯ // NAT TRAVERSAL & HARDWARE GAUGES:",
-            font=ctk.CTkFont(family=FONT_MONO, size=12, weight="bold"),
-            text_color=TEXT_BRIGHT
-        ).pack(side="left")
+        box = ctk.CTkFrame(self.main_container, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
+        box.pack(fill="x")
 
-        t_box = ctk.CTkFrame(self.main_bay, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
-        t_box.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+        b_pad = ctk.CTkFrame(box, fg_color="transparent")
+        b_pad.pack(fill="x", padx=18, pady=16)
 
-        tb_pad = ctk.CTkFrame(t_box, fg_color="transparent")
-        tb_pad.pack(fill="both", expand=True, padx=16, pady=12)
-
-        telemetry_rows = [
-            ("STUN NAT CLASSIFICATION (RFC 5389)", "Restricted Cone (Прямой P2P проброс активен)"),
-            ("UPnP / NAT-PMP IGD STATUS", "● ENABLED (Авто-проброс портов на шлюзе активен)"),
-            ("VIRTUAL ADAPTER SUBNET", "10.42.0.0/24 (Host IP: 10.42.0.1, Clients: 10.42.0.2..254)"),
-            ("SOCKET TRANSPORT ENGINE", "WebSocket Wire / UDP Hole Punching Forwarder"),
-            ("SIGNALING CONTROL SOCKET", "ws://localhost:8787 (Синхронизация комнат активна)"),
-            ("PACKET MTU / MSS", "1420 BYTES / 1380 BYTES"),
+        diag_items = [
+            ("Тип NAT (STUN RFC 5389)", "Restricted Cone (Прямой P2P доступен)"),
+            ("UPnP / NAT-PMP IGD", "● Активен (Авто-проброс портов включен)"),
+            ("Виртуальная подсеть", "10.42.0.0/24 (Хост: 10.42.0.1)"),
+            ("Транспортный стек", "WebSocket / UDP Hole Punching Forwarder"),
+            ("Сигнальный сервер", "ws://localhost:8787"),
         ]
 
-        for label, val in telemetry_rows:
-            r = ctk.CTkFrame(tb_pad, fg_color="transparent")
+        for label, val in diag_items:
+            r = ctk.CTkFrame(b_pad, fg_color="transparent")
             r.pack(fill="x", pady=4)
-
-            ctk.CTkLabel(r, text=label, font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), text_color=TEXT_ETCHED, width=280, anchor="w").pack(side="left")
-            ctk.CTkLabel(r, text=val, font=ctk.CTkFont(family=FONT_MONO, size=11), text_color=LCD_TEXT).pack(side="left")
+            ctk.CTkLabel(r, text=label, font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"), text_color=TEXT_MUTED, width=220, anchor="w").pack(side="left")
+            ctk.CTkLabel(r, text=val, font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MAIN).pack(side="left")
 
     # ----------------------------------------------------
-    # HARDWARE DIALOGS
+    # DIALOGS
     # ----------------------------------------------------
     def _open_create_dialog(self, default_preset=None):
         dlg = ctk.CTkToplevel(self)
-        dlg.title("ИНИЦИАЛИЗАЦИЯ СЕТЕВОГО КАНАЛА")
-        dlg.geometry("400x330")
+        dlg.title("Создать комнату")
+        dlg.geometry("380x320")
         dlg.resizable(False, False)
-        dlg.configure(fg_color=CHASSIS_BG)
+        dlg.configure(fg_color=BG_COLOR)
         dlg.grab_set()
 
-        p = ctk.CTkFrame(dlg, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
+        p = ctk.CTkFrame(dlg, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
         p.pack(padx=16, pady=16, fill="both", expand=True)
 
-        ctk.CTkLabel(p, text="⊕ ПАРАМЕТРЫ СЕТЕВОГО КАНАЛА", font=ctk.CTkFont(family=FONT_MONO, size=13, weight="bold"), text_color=TEXT_BRIGHT).pack(anchor="w", padx=12, pady=(12, 10))
+        ctk.CTkLabel(p, text="Параметры комнаты", font=ctk.CTkFont(family=FONT_SANS, size=14, weight="bold"), text_color=TEXT_MAIN).pack(anchor="w", padx=14, pady=(12, 10))
 
-        ctk.CTkLabel(p, text="ИМЯ КАНАЛА:", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=TEXT_ETCHED).pack(anchor="w", padx=12)
-        name_in = ctk.CTkEntry(p, height=28, corner_radius=3, placeholder_text=f"{self.nick}'s Switch", font=ctk.CTkFont(family=FONT_MONO, size=11), fg_color=BAY_BG, border_color=BORDER_METAL)
-        name_in.pack(fill="x", padx=12, pady=(2, 8))
+        ctk.CTkLabel(p, text="Название комнаты:", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(anchor="w", padx=14)
+        name_in = ctk.CTkEntry(p, height=30, corner_radius=6, placeholder_text=f"{self.nick}'s Party", font=ctk.CTkFont(family=FONT_SANS, size=11), fg_color="#18181c", border_color=BENTO_BORDER)
+        name_in.pack(fill="x", padx=14, pady=(2, 8))
 
-        ctk.CTkLabel(p, text="ИГРОВОЙ ПРЕСЕТ:", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=TEXT_ETCHED).pack(anchor="w", padx=12)
+        ctk.CTkLabel(p, text="Игра:", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(anchor="w", padx=14)
         preset_names = [x["name"] for x in GAME_PRESETS]
         preset_var = ctk.StringVar(value=default_preset["name"] if default_preset else preset_names[0])
-        opt = ctk.CTkOptionMenu(p, values=preset_names, variable=preset_var, height=28, corner_radius=3, fg_color=BAY_BG, button_color=BORDER_METAL, font=ctk.CTkFont(family=FONT_MONO, size=11))
-        opt.pack(fill="x", padx=12, pady=(2, 8))
+        opt = ctk.CTkOptionMenu(p, values=preset_names, variable=preset_var, height=30, corner_radius=6, fg_color="#18181c", button_color=BENTO_BORDER, font=ctk.CTkFont(family=FONT_SANS, size=11))
+        opt.pack(fill="x", padx=14, pady=(2, 8))
 
-        ctk.CTkLabel(p, text="КЛЮЧ ДОСТУПА (ПАРОЛЬ):", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=TEXT_ETCHED).pack(anchor="w", padx=12)
-        pass_in = ctk.CTkEntry(p, height=28, corner_radius=3, placeholder_text="БЕЗ ПАРОЛЯ", show="*", font=ctk.CTkFont(family=FONT_MONO, size=11), fg_color=BAY_BG, border_color=BORDER_METAL)
-        pass_in.pack(fill="x", padx=12, pady=(2, 14))
+        ctk.CTkLabel(p, text="Пароль (опционально):", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(anchor="w", padx=14)
+        pass_in = ctk.CTkEntry(p, height=30, corner_radius=6, placeholder_text="Без пароля", show="*", font=ctk.CTkFont(family=FONT_SANS, size=11), fg_color="#18181c", border_color=BENTO_BORDER)
+        pass_in.pack(fill="x", padx=14, pady=(2, 14))
 
         def submit():
-            r_name = name_in.get().strip() or f"{self.nick}'s Switch"
+            r_name = name_in.get().strip() or f"{self.nick}'s Party"
             r_pass = pass_in.get().strip()
             sel_p = next((x for x in GAME_PRESETS if x["name"] == preset_var.get()), GAME_PRESETS[0])
             self.client.create_room(r_name, sel_p["id"], r_pass)
             dlg.destroy()
 
-        ctk.CTkButton(p, text="ЗАПУСТИТЬ КАНАЛ", height=32, corner_radius=3, fg_color="#1e3a5f", hover_color="#2563eb", font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), command=submit).pack(fill="x", padx=12)
+        ctk.CTkButton(p, text="Создать сеть", height=32, corner_radius=6, fg_color=ACCENT_ORANGE, hover_color=ACCENT_ORANGE_HOVER, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), command=submit).pack(fill="x", padx=14)
 
     def _open_join_dialog(self):
         dlg = ctk.CTkToplevel(self)
-        dlg.title("ПОДКЛЮЧЕНИЕ К КАНАЛУ")
-        dlg.geometry("360x250")
+        dlg.title("Вход в комнату")
+        dlg.geometry("360x240")
         dlg.resizable(False, False)
-        dlg.configure(fg_color=CHASSIS_BG)
+        dlg.configure(fg_color=BG_COLOR)
         dlg.grab_set()
 
-        p = ctk.CTkFrame(dlg, fg_color=RACK_FACE, corner_radius=4, border_width=1, border_color=BORDER_METAL)
+        p = ctk.CTkFrame(dlg, fg_color=BENTO_CARD, corner_radius=10, border_width=1, border_color=BENTO_BORDER)
         p.pack(padx=16, pady=16, fill="both", expand=True)
 
-        ctk.CTkLabel(p, text="⤹ ВХОД В СЕТЕВОЙ КАНАЛ", font=ctk.CTkFont(family=FONT_MONO, size=13, weight="bold"), text_color=TEXT_BRIGHT).pack(anchor="w", padx=12, pady=(12, 10))
+        ctk.CTkLabel(p, text="Подключение по коду", font=ctk.CTkFont(family=FONT_SANS, size=14, weight="bold"), text_color=TEXT_MAIN).pack(anchor="w", padx=14, pady=(12, 10))
 
-        ctk.CTkLabel(p, text="КОД СЕТИ (LAN-XXXX):", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=TEXT_ETCHED).pack(anchor="w", padx=12)
-        code_in = ctk.CTkEntry(p, height=28, corner_radius=3, placeholder_text="LAN-XXXX", font=ctk.CTkFont(family=FONT_MONO, size=12), fg_color=BAY_BG, border_color=BORDER_METAL)
-        code_in.pack(fill="x", padx=12, pady=(2, 8))
+        ctk.CTkLabel(p, text="Код комнаты (LAN-XXXX):", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(anchor="w", padx=14)
+        code_in = ctk.CTkEntry(p, height=30, corner_radius=6, placeholder_text="LAN-XXXX", font=ctk.CTkFont(family=FONT_MONO, size=12), fg_color="#18181c", border_color=BENTO_BORDER)
+        code_in.pack(fill="x", padx=14, pady=(2, 8))
 
-        ctk.CTkLabel(p, text="ПАРОЛЬ (ЕСЛИ ТРЕБУЕТСЯ):", font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"), text_color=TEXT_ETCHED).pack(anchor="w", padx=12)
-        pass_in = ctk.CTkEntry(p, height=28, corner_radius=3, placeholder_text="ПАРОЛЬ", show="*", font=ctk.CTkFont(family=FONT_MONO, size=11), fg_color=BAY_BG, border_color=BORDER_METAL)
-        pass_in.pack(fill="x", padx=12, pady=(2, 14))
+        ctk.CTkLabel(p, text="Пароль:", font=ctk.CTkFont(family=FONT_SANS, size=11), text_color=TEXT_MUTED).pack(anchor="w", padx=14)
+        pass_in = ctk.CTkEntry(p, height=30, corner_radius=6, placeholder_text="Если требуется", show="*", font=ctk.CTkFont(family=FONT_SANS, size=11), fg_color="#18181c", border_color=BENTO_BORDER)
+        pass_in.pack(fill="x", padx=14, pady=(2, 14))
 
         def submit():
             code = code_in.get().strip()
@@ -732,60 +702,39 @@ class LANForgeApp(ctk.CTk):
                 self.client.join_room(code, pass_in.get().strip())
                 dlg.destroy()
 
-        ctk.CTkButton(p, text="ПОДКЛЮЧИТЬ ПОРТ", height=32, corner_radius=3, fg_color="#1e3a5f", hover_color="#2563eb", font=ctk.CTkFont(family=FONT_MONO, size=11, weight="bold"), command=submit).pack(fill="x", padx=12)
+        ctk.CTkButton(p, text="Подключиться", height=32, corner_radius=6, fg_color=ACCENT_ORANGE, hover_color=ACCENT_ORANGE_HOVER, font=ctk.CTkFont(family=FONT_SANS, size=12, weight="bold"), command=submit).pack(fill="x", padx=14)
 
     def _copy(self, text, message="Скопировано"):
         self.clipboard_clear()
         self.clipboard_append(text)
         self.update()
 
-    def _start_led_pulse(self):
-        self.led_state = not self.led_state
-        if self.active_module == "patchbay" and self.client.room:
-            self._show_module("patchbay")
-        self.after(1000, self._start_led_pulse)
-
     def _bind_client_events(self):
         def on_conn(status):
-            try:
-                self.after(0, lambda: self.lcd_label_1.configure(
-                    text="[SYS: ONLINE]  LINK: READY" if status else "[SYS: ERROR]  LINK: OFFLINE",
-                    text_color=LCD_TEXT if status else LED_RED_ON
-                ))
-            except Exception:
-                pass
+            pass
 
         def on_room(room):
             try:
-                if room:
-                    self.after(0, lambda: self.lcd_label_2.configure(
-                        text=f"ROOM: {room.get('code')}  |  HOST: 10.42.0.1"
-                    ))
-                else:
-                    self.after(0, lambda: self.lcd_label_2.configure(
-                        text="ROOM: DISCONNECTED  |  DIRECT: STANDBY"
-                    ))
-                self.after(0, lambda: self._show_module("patchbay"))
+                self.after(0, lambda: self._show_tab("overview"))
             except Exception:
                 pass
 
         def on_ping(rtt):
             try:
-                self.after(0, lambda: self.lcd_label_1.configure(
-                    text=f"[SYS: ONLINE]  RTT: {rtt}ms  |  PEERS: {len(self.client.room.get('peers', [])) if self.client.room else 0}/16"
-                ))
+                if self.active_tab == "overview":
+                    self.after(0, lambda: self._show_tab("overview"))
             except Exception:
                 pass
 
         def on_chat(msg):
             try:
-                self.after(0, lambda: self._show_module("chat") if self.active_module == "chat" else None)
+                self.after(0, lambda: self._show_tab("chat") if self.active_tab == "chat" else None)
             except Exception:
                 pass
 
         def on_game(game):
             try:
-                self.after(0, lambda: self._show_module("radar") if self.active_module == "radar" else None)
+                self.after(0, lambda: self._show_tab("radar") if self.active_tab == "radar" else None)
             except Exception:
                 pass
 
