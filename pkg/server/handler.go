@@ -45,9 +45,20 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"activeRooms":    s.Manager.ActiveRoomsCount(),
 			"connectedPeers": s.Manager.ActivePeersCount(),
+		})
+	})
+
+	mux.HandleFunc("/api/probe-stun", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		probes := stun.ProbeAllStunServers()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "ok",
+			"stunProbes": probes,
 		})
 	})
 

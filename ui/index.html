@@ -1182,9 +1182,20 @@
         btn.disabled = false;
         btn.style.opacity = "1";
         statusEl.innerText = "Тест завершен";
-      }, 3000);
+      }, 3500);
 
-      sendWS({ type: "probe_stun" });
+      // Primary: Direct Fast REST Endpoint with instant fallback
+      fetch("http://127.0.0.1:8787/api/probe-stun")
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.stunProbes) {
+            updateStunMatrixResults(data.stunProbes);
+          }
+        })
+        .catch(err => {
+          console.warn("[STUN] REST probe error, trying WebSocket:", err);
+          sendWS({ type: "probe_stun" });
+        });
     }
 
     function updateStunMatrixResults(probes) {
