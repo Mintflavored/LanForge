@@ -1,12 +1,12 @@
 """
-LANForge Desktop Launcher (v1.5.0)
+LANForge Desktop Launcher (v1.6.0)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
-- Auto-manages Go backend server lifecycle with zero orphaned processes
+- Hybrid Cloud & Local Signaling support
 """
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 import os
 import sys

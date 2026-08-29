@@ -636,7 +636,7 @@
         <circle cx="12" cy="12" r="2.2" fill="#ff5500"/>
       </svg>
       <span class="brand-text">LANFORGE<span class="brand-dot">.</span></span>
-      <span class="version-tag">v1.5.0</span>
+      <span class="version-tag">v1.6.0</span>
       <span class="brand-sub">by <span class="nervs-red">NERVS</span></span>
     </div>
 
@@ -650,6 +650,7 @@
 
     <div class="nav-actions">
       <button class="btn btn-secondary btn-sm" id="btn-sound-toggle" title="Звуковые сигналы" onclick="toggleSound()">🔊</button>
+      <button class="btn btn-secondary btn-sm" id="btn-settings" title="Настройки сети и профиля" onclick="openSettingsModal()">⚙️</button>
       <button class="btn btn-primary" onclick="openCreateModal()">+ Создать сеть</button>
       <button class="btn btn-secondary" onclick="openJoinModal()">Войти по коду</button>
     </div>
@@ -923,6 +924,37 @@
     </div>
   </div>
 
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal" onclick="onOverlayClick(event, 'settings-modal')">
+    <div class="modal-box" style="width: 440px;">
+      <h3 style="font-size: 16px; margin-bottom: 16px;">⚙️ Настройки сети и профиля</h3>
+      
+      <label class="card-title-badge">ВАШ ИГРОВОЙ НИКНЕЙМ</label>
+      <input type="text" class="input-field" id="settings-nick" placeholder="Player_123">
+
+      <label class="card-title-badge">СИГНАЛИНГ СЕРВЕР СЕТИ (P2P ХАБ)</label>
+      <select class="input-field" id="settings-server-mode" onchange="onServerModeChange()">
+        <option value="local">💻 Локальный / Встроенный (127.0.0.1:8787)</option>
+        <option value="cloud">🌐 Глобальный облачный сервер (По умолчанию)</option>
+        <option value="custom">🛠️ Пользовательский сервер (Свой VPS / IP)</option>
+      </select>
+
+      <div id="settings-custom-url-container" style="display: none;">
+        <label class="card-title-badge">АДРЕС ПОЛЬЗОВАТЕЛЬСКОГО СЕРВЕРА (WS / WSS)</label>
+        <input type="text" class="input-field" id="settings-custom-url" placeholder="ws://my-vps.com:8787">
+      </div>
+
+      <div style="background: #18181c; border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: var(--text-dim); line-height: 1.4;">
+        💡 <b>Подсказка:</b> Для совместной игры через Интернет все друзья должны быть подключены к одному сигналинг-серверу (например, Облачному или вашему VPS).
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+        <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Сохранить настройки</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // PRESETS CATALOG
     const GAME_PRESETS = [
@@ -953,7 +985,9 @@
     ];
 
     let currentRoom = null;
-    let myNick = "Player_" + Math.floor(100 + Math.random() * 900);
+    let myNick = localStorage.getItem("lanforge_nick") || ("Player_" + Math.floor(100 + Math.random() * 900));
+    let currentServerMode = localStorage.getItem("lanforge_server_mode") || "local";
+    let currentServerUrl = localStorage.getItem("lanforge_server_url") || "ws://127.0.0.1:8787";
     let myVirtualIp = "10.42.0.1";
     let myId = "";
     let selectedCategory = "Все";
@@ -967,7 +1001,7 @@
     window.addEventListener("DOMContentLoaded", () => {
       renderPresets();
       renderStunMatrix();
-      connectWebSocket();
+      connectWebSocket(currentServerUrl);
 
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModals();
@@ -987,12 +1021,26 @@
     });
 
     // WEBSOCKET CLIENT
-    function connectWebSocket() {
-      ws = new WebSocket("ws://127.0.0.1:8787");
+    function connectWebSocket(url = currentServerUrl) {
+      if (ws) {
+        try { ws.close(); } catch(e) {}
+        ws = null;
+      }
+
+      currentServerUrl = url;
+      console.log("[WS] Connecting to Signaling Engine at:", currentServerUrl);
+      
+      try {
+        ws = new WebSocket(currentServerUrl);
+      } catch (err) {
+        console.error("[WS] Connection creation failed:", err);
+        return;
+      }
 
       ws.onopen = () => {
-        console.log("[WS] Connected to Go Signaling Engine");
+        console.log("[WS] Connected to Signaling Engine");
         startPingHeartbeat();
+        showToast("Подключено к хабу сети");
       };
 
       ws.onmessage = (event) => {
@@ -1005,9 +1053,9 @@
       };
 
       ws.onclose = () => {
-        console.log("[WS] Disconnected, reconnecting in 1.5s...");
+        console.log("[WS] Disconnected, reconnecting in 2s...");
         if (pingTimer) clearInterval(pingTimer);
-        setTimeout(connectWebSocket, 1500);
+        setTimeout(() => connectWebSocket(currentServerUrl), 2000);
       };
     }
 
@@ -1599,8 +1647,54 @@
     }
 
     function openJoinModal() {
+      document.getElementById("join-room-code").value = "";
+      document.getElementById("join-room-pass").value = "";
       document.getElementById("join-modal").classList.add("active");
       setTimeout(() => document.getElementById("join-room-code").focus(), 50);
+    }
+
+    function openSettingsModal() {
+      document.getElementById("settings-nick").value = myNick;
+      document.getElementById("settings-server-mode").value = currentServerMode;
+      document.getElementById("settings-custom-url").value = currentServerUrl;
+      onServerModeChange();
+      document.getElementById("settings-modal").classList.add("active");
+      setTimeout(() => document.getElementById("settings-nick").focus(), 50);
+    }
+
+    function onServerModeChange() {
+      const mode = document.getElementById("settings-server-mode").value;
+      const customBox = document.getElementById("settings-custom-url-container");
+      if (mode === "custom") {
+        customBox.style.display = "block";
+      } else {
+        customBox.style.display = "none";
+      }
+    }
+
+    function saveSettings() {
+      const newNick = document.getElementById("settings-nick").value.trim() || myNick;
+      const mode = document.getElementById("settings-server-mode").value;
+      let newUrl = "ws://127.0.0.1:8787";
+
+      if (mode === "cloud") {
+        newUrl = "wss://lanforge-signaling.onrender.com";
+      } else if (mode === "custom") {
+        newUrl = document.getElementById("settings-custom-url").value.trim() || "ws://127.0.0.1:8787";
+      }
+
+      myNick = newNick;
+      currentServerMode = mode;
+      localStorage.setItem("lanforge_nick", myNick);
+      localStorage.setItem("lanforge_server_mode", currentServerMode);
+      localStorage.setItem("lanforge_server_url", newUrl);
+
+      closeModals();
+      showToast("Настройки профиля сохранены");
+
+      if (newUrl !== currentServerUrl) {
+        connectWebSocket(newUrl);
+      }
     }
 
     function closeModals() {
