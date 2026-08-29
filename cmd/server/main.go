@@ -4,12 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/lanforge/lanforge/pkg/server"
 )
 
 func main() {
-	port := flag.Int("port", 8787, "Port for signaling server")
+	defaultPort := 8787
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil && p > 0 {
+			defaultPort = p
+		}
+	}
+
+	port := flag.Int("port", defaultPort, "Port for signaling server")
 	flag.Parse()
 
 	srv := server.NewServer(*port)

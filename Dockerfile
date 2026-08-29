@@ -18,4 +18,4 @@ COPY --from=builder /lanforge-server .
 EXPOSE 8787
 ENV PORT=8787
 
-CMD ["./lanforge-server", "-port", "8787"]
+CMD ["./lanforge-server"]
