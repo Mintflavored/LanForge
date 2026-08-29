@@ -1,5 +1,6 @@
 """
-LANForge Desktop Application Entrypoint (Ultra-Smooth High Performance Edition)
+LANForge Desktop Application Entrypoint (Z-Stack Architecture with tkraise)
+Zero unmapping, zero geometry recalculations, instant atomic view switching.
 """
 
 import os
@@ -56,11 +57,13 @@ class LANForgeApp(ctk.CTk):
         )
         self.nav_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(12, 6))
 
-        # Main Views Container
+        # Main Views Container (Stacked Z-Index Grid)
         self.main_container = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
         self.main_container.grid(row=1, column=0, sticky="nsew", padx=20, pady=(4, 16))
+        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
 
-        # Cached View Components (Built once for instantaneous switching)
+        # Instantiate View Components into the exact same grid cell
         self.views = {
             "overview": OverviewView(
                 self.main_container,
@@ -85,16 +88,17 @@ class LANForgeApp(ctk.CTk):
             "diag": DiagView(self.main_container),
         }
 
+        # Grid all views simultaneously (they stay mapped in memory permanently)
+        for view in self.views.values():
+            view.grid(row=0, column=0, sticky="nsew")
+
     def _show_tab(self, tab_id):
         self.active_tab = tab_id
         self.nav_bar.set_active_tab(tab_id)
 
-        # Instantaneous 0ms frame switching — no geometry lag or canvas flicker
-        for name, view in self.views.items():
-            if name == tab_id:
-                view.pack(fill="both", expand=True)
-            else:
-                view.pack_forget()
+        # tkraise() brings the target view to top without unmapping or re-laying out child widgets
+        if tab_id in self.views:
+            self.views[tab_id].tkraise()
 
     def show_toast(self, text, toast_type="orange"):
         """Displays floating animated toast notification."""

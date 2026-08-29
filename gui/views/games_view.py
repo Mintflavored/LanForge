@@ -1,6 +1,5 @@
 """
-Games Catalog View (High-Performance Pre-Cached Cards Architecture)
-Zero pop-in, zero waterfall redraws, pre-instantiated widgets.
+Games Catalog View (Instant Pre-Rendered Catalog with Real-Time Search)
 """
 
 import customtkinter as ctk
@@ -22,12 +21,13 @@ class GamesView(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent", corner_radius=0)
         self.on_preset_selected = on_preset_selected
         self.preset_filter = "Все"
+        self.search_query = ""
         self.card_widgets = {}
 
         self._setup_ui()
 
     def _setup_ui(self):
-        # Header title
+        # Header with Title and Real-Time Search Bar
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", pady=(0, 10))
 
@@ -38,7 +38,22 @@ class GamesView(ctk.CTkFrame):
             text_color=TEXT_MAIN
         ).pack(side="left")
 
-        # Category filter chips
+        # Search Bar
+        self.search_entry = ctk.CTkEntry(
+            header,
+            placeholder_text="Поиск игры по названию...",
+            height=28,
+            width=220,
+            corner_radius=6,
+            fg_color=BENTO_CARD,
+            border_color=BENTO_BORDER,
+            text_color=TEXT_MAIN,
+            font=ctk.CTkFont(family=FONT_SANS, size=11)
+        )
+        self.search_entry.pack(side="right")
+        self.search_entry.bind("<KeyRelease>", self._on_search_changed)
+
+        # Category Filter Chips
         f_box = ctk.CTkFrame(self, fg_color="transparent")
         f_box.pack(fill="x", pady=(0, 10))
 
@@ -64,14 +79,12 @@ class GamesView(ctk.CTkFrame):
         self.games_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.games_scroll.pack(fill="both", expand=True)
 
-        # Pre-instantiate all game cards ONCE into memory (Flat 1-layer geometry)
         self._build_all_cards()
         self._apply_filter()
 
     def _build_all_cards(self):
         """Creates lightweight, flattened card widgets once to eliminate pop-in loading."""
         for p in GAME_PRESETS:
-            # Single lightweight card frame
             card = ctk.CTkFrame(
                 self.games_scroll,
                 fg_color=BENTO_CARD,
@@ -129,7 +142,11 @@ class GamesView(ctk.CTkFrame):
                 text_color="#71717a"
             ).pack(anchor="w", padx=14, pady=(0, 10))
 
-            self.card_widgets[p["id"]] = (card, p["category"])
+            self.card_widgets[p["id"]] = (card, p["name"].lower(), p["category"])
+
+    def _on_search_changed(self, event=None):
+        self.search_query = self.search_entry.get().strip().lower()
+        self._apply_filter()
 
     def _filter_games(self, cat):
         self.preset_filter = cat
@@ -141,10 +158,13 @@ class GamesView(ctk.CTkFrame):
         self._apply_filter()
 
     def _apply_filter(self):
-        """Instantly packs/unpacks already pre-rendered cards without recreating widgets."""
+        """Instantly filters cards without recreating widgets."""
         for p in GAME_PRESETS:
-            card, category = self.card_widgets[p["id"]]
-            if self.preset_filter == "Все" or category == self.preset_filter:
+            card, name_lower, category = self.card_widgets[p["id"]]
+            matches_cat = (self.preset_filter == "Все" or category == self.preset_filter)
+            matches_search = (not self.search_query or self.search_query in name_lower)
+
+            if matches_cat and matches_search:
                 card.pack(fill="x", pady=4)
             else:
                 card.pack_forget()
