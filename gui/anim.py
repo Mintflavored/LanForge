@@ -1,6 +1,6 @@
 """
 LANForge UI Micro-Animation Engine
-Smooth, low-CPU interpolation helpers, pulsing lights, floating toasts, and view transitions.
+Smooth, low-CPU interpolation helpers, pulsing lights, floating toasts, sliding tab pills, and view transitions.
 """
 
 import math
@@ -25,17 +25,18 @@ def lerp_color(color_a, color_b, t):
 
 def animate_view_reveal(container, current_view, next_view, on_complete=None):
     """
-    Subtle, silky 90ms vertical slide-up reveal transition (Raycast / Linear style).
-    Moves incoming view from y=+14px to y=0px with cubic ease-out.
+    Smooth, visibly distinct vertical slide-up reveal transition (Raycast / Linear style).
+    Moves incoming view from y=+32px to y=0px with cubic ease-out over ~200ms.
     """
     if current_view and current_view != next_view:
         current_view.place_forget()
 
-    start_offset_y = 12
-    total_steps = 6
-    step_duration_ms = 14  # ~85ms total transition
+    start_offset_y = 32
+    total_steps = 10
+    step_duration_ms = 18
 
     next_view.place(relx=0, y=start_offset_y, relwidth=1, relheight=1)
+    container.update_idletasks()
 
     def _step(step_idx):
         if not next_view.winfo_exists():
@@ -47,18 +48,58 @@ def animate_view_reveal(container, current_view, next_view, on_complete=None):
             ease = 1 - math.pow(1 - t, 3)
             current_y = int(start_offset_y * (1.0 - ease))
             next_view.place_configure(y=current_y)
+            container.update_idletasks()
             container.after(step_duration_ms, lambda: _step(step_idx + 1))
         else:
             next_view.place(relx=0, rely=0, relwidth=1, relheight=1)
+            container.update_idletasks()
             if on_complete:
                 on_complete()
 
     _step(1)
 
 
+class SlidingTabIndicator:
+    """Animates a highlight pill sliding under the active tab buttons."""
+    def __init__(self, parent_container, pill_widget):
+        self.container = parent_container
+        self.pill = pill_widget
+        self.current_x = 4
+        self.target_x = 4
+        self.current_w = 80
+        self.target_w = 80
+        self.animating = False
+
+    def slide_to(self, target_x, target_w):
+        self.target_x = target_x
+        self.target_w = target_w
+
+        if not self.animating:
+            self.animating = True
+            self._step(0, 8, self.current_x, self.current_w)
+
+    def _step(self, step_idx, total_steps, start_x, start_w):
+        if step_idx <= total_steps:
+            t = step_idx / total_steps
+            ease = 1 - math.pow(1 - t, 3)
+            new_x = int(start_x + (self.target_x - start_x) * ease)
+            new_w = int(start_w + (self.target_w - start_w) * ease)
+
+            self.pill.place_configure(x=new_x, width=new_w)
+            self.current_x = new_x
+            self.current_w = new_w
+            self.container.update_idletasks()
+            self.container.after(16, lambda: self._step(step_idx + 1, total_steps, start_x, start_w))
+        else:
+            self.pill.place_configure(x=self.target_x, width=self.target_w)
+            self.current_x = self.target_x
+            self.current_w = self.target_w
+            self.animating = False
+
+
 class ToastNotification(ctk.CTkFrame):
     """Sleek floating brutalist toast notification that slides in from top."""
-    def __init__(self, parent, text="Уведомление", toast_type="info", duration_ms=2200):
+    def __init__(self, parent, text="Уведомление", toast_type="info", duration_ms=2500):
         accent_col = "#ff5500" if toast_type == "orange" else ("#22c55e" if toast_type == "green" else "#3b82f6")
         
         super().__init__(
@@ -71,18 +112,18 @@ class ToastNotification(ctk.CTkFrame):
         self.parent = parent
         self.duration_ms = duration_ms
         self.step = 0
-        self.total_steps = 7
-        self.current_y = -50
-        self.target_y = 14
+        self.total_steps = 8
+        self.current_y = -60
+        self.target_y = 16
 
         pad = ctk.CTkFrame(self, fg_color="transparent")
-        pad.pack(padx=16, pady=8)
+        pad.pack(padx=18, pady=10)
 
         icon = "●"
         ctk.CTkLabel(
             pad,
             text=icon,
-            font=ctk.CTkFont(size=10, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
             text_color=accent_col
         ).pack(side="left", padx=(0, 8))
 
@@ -115,7 +156,7 @@ class ToastNotification(ctk.CTkFrame):
         if self.step <= self.total_steps:
             t = self.step / self.total_steps
             ease = math.pow(t, 2)
-            y = self.target_y - (60 * ease)
+            y = self.target_y - (70 * ease)
             self.place_configure(y=y)
             self.step += 1
             self.after(16, self._animate_out)
