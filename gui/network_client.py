@@ -20,7 +20,7 @@ class NetworkClient:
         self.callbacks = {}
         self.running = True
 
-        # Start background event loop in thread
+        # Start background event loop in dedicated daemon thread
         self.thread = threading.Thread(target=self._run_async_loop, daemon=True)
         self.thread.start()
 
@@ -46,12 +46,11 @@ class NetworkClient:
     async def _connect_and_listen(self):
         while self.running:
             try:
-                async with websockets.connect(self.server_url) as ws:
+                async with websockets.connect(self.server_url, ping_interval=20, ping_timeout=10) as ws:
                     self.ws = ws
                     self.connected = True
                     self._emit("connection", True)
 
-                    # Start ping loop
                     ping_task = asyncio.create_task(self._ping_loop())
 
                     try:
@@ -110,7 +109,7 @@ class NetworkClient:
                 await self.ws.send(payload)
             except Exception:
                 break
-            await asyncio.sleep(3)
+            await asyncio.sleep(4)
 
     def send_json(self, payload):
         if self.loop and self.ws and self.connected:
@@ -149,7 +148,7 @@ class NetworkClient:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.bind(("0.0.0.0", 4445))
-            sock.settimeout(1.0)
+            sock.settimeout(0.5)
 
             while self.running:
                 try:
