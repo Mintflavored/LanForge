@@ -1,6 +1,6 @@
 """
-Games Catalog View (Ultra-Lightweight High-Density Stream Architecture)
-Zero waterfall, zero canvas lag, instantaneous sub-10ms atomic rendering.
+Games Catalog View (Bento Grid Architecture — 2-Column High-Speed Layout)
+Zero scrollbar canvas overhead, zero waterfall redraws, 100% instantaneous atomic display.
 """
 
 import customtkinter as ctk
@@ -9,7 +9,6 @@ from gui.theme import (
     BENTO_HOVER,
     BENTO_BORDER,
     TEXT_MAIN,
-    TEXT_SECONDARY,
     TEXT_MUTED,
     ACCENT_ORANGE,
     ACCENT_ORANGE_HOVER,
@@ -44,7 +43,7 @@ class GamesView(ctk.CTkFrame):
             header,
             placeholder_text="Поиск по названию...",
             height=28,
-            width=200,
+            width=220,
             corner_radius=6,
             fg_color=BENTO_CARD,
             border_color=BENTO_BORDER,
@@ -56,7 +55,7 @@ class GamesView(ctk.CTkFrame):
 
         # Filter Chips Bar
         f_box = ctk.CTkFrame(self, fg_color="transparent")
-        f_box.pack(fill="x", pady=(0, 8))
+        f_box.pack(fill="x", pady=(0, 12))
 
         self.game_filter_btns = {}
         cats = ["Все", "Песочницы", "Шутеры", "Выживание", "Классика"]
@@ -65,7 +64,7 @@ class GamesView(ctk.CTkFrame):
                 f_box,
                 text=cat,
                 height=26,
-                width=80,
+                width=85,
                 corner_radius=6,
                 fg_color="#202024" if self.preset_filter == cat else "transparent",
                 hover_color=BENTO_HOVER,
@@ -76,70 +75,71 @@ class GamesView(ctk.CTkFrame):
             btn.pack(side="left", padx=2)
             self.game_filter_btns[cat] = btn
 
-        # Lightweight Scrollable Container
-        self.games_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.games_scroll.pack(fill="both", expand=True)
+        # 2-Column Bento Grid Container (Direct CTkFrame, zero Canvas scroll jitter)
+        self.grid_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.grid_container.pack(fill="both", expand=True)
+        self.grid_container.grid_columnconfigure(0, weight=1)
+        self.grid_container.grid_columnconfigure(1, weight=1)
 
         self._build_all_cards()
         self._apply_filter()
 
     def _build_all_cards(self):
-        """Creates single-layer high-density rows that render atomically without canvas lag."""
+        """Creates pre-rendered Bento Cards for each game preset."""
         for p in GAME_PRESETS:
-            # Flat, single-layer row container (no nested subframes)
-            row = ctk.CTkFrame(
-                self.games_scroll,
-                height=48,
+            card = ctk.CTkFrame(
+                self.grid_container,
+                height=68,
                 fg_color=BENTO_CARD,
-                corner_radius=6,
+                corner_radius=8,
                 border_width=1,
                 border_color=BENTO_BORDER
             )
 
-            # Left: Game Title
-            name_lbl = ctk.CTkLabel(
-                row,
+            # Left side content
+            info_box = ctk.CTkFrame(card, fg_color="transparent")
+            info_box.pack(side="left", fill="both", expand=True, padx=14, pady=8)
+
+            title_row = ctk.CTkFrame(info_box, fg_color="transparent")
+            title_row.pack(anchor="w")
+
+            ctk.CTkLabel(
+                title_row,
                 text=p["name"],
                 font=ctk.CTkFont(family=FONT_SANS, size=13, weight="bold"),
-                text_color=TEXT_MAIN,
-                anchor="w"
-            )
-            name_lbl.pack(side="left", padx=(14, 8), pady=10)
+                text_color=TEXT_MAIN
+            ).pack(side="left")
 
-            # Center: Category & Port Badge
-            spec_str = f"[{p['category']}]  {p['protocol'].upper()}:{p['default_port']}"
-            spec_lbl = ctk.CTkLabel(
-                row,
-                text=spec_str,
-                font=ctk.CTkFont(family=FONT_MONO, size=11),
+            port_badge = f"[{p['protocol'].upper()}:{p['default_port']}]"
+            ctk.CTkLabel(
+                title_row,
+                text=port_badge,
+                font=ctk.CTkFont(family=FONT_MONO, size=10),
                 text_color=TEXT_MUTED
-            )
-            spec_lbl.pack(side="left", padx=8)
+            ).pack(side="left", padx=8)
 
-            # Right: Action Button
+            ctk.CTkLabel(
+                info_box,
+                text=p["hint"],
+                font=ctk.CTkFont(family=FONT_SANS, size=10),
+                text_color="#71717a"
+            ).pack(anchor="w", pady=(2, 0))
+
+            # Right side action button
             btn = ctk.CTkButton(
-                row,
-                text="Создать сеть →",
+                card,
+                text="Создать",
                 height=26,
-                width=115,
-                corner_radius=4,
+                width=80,
+                corner_radius=6,
                 fg_color=ACCENT_ORANGE,
                 hover_color=ACCENT_ORANGE_HOVER,
                 font=ctk.CTkFont(family=FONT_SANS, size=11, weight="bold"),
                 command=lambda preset=p: self.on_preset_selected(preset)
             )
-            btn.pack(side="right", padx=12, pady=10)
+            btn.pack(side="right", padx=12, pady=12)
 
-            # Hint Label (Left of button)
-            hint_lbl = ctk.CTkLabel(
-                row,
-                text=p["hint"],
-                font=ctk.CTkFont(family=FONT_SANS, size=10),
-                text_color="#64748b"
-            )
-            hint_lbl.pack(side="right", padx=10)
-
-            self.card_widgets[p["id"]] = (row, p["name"].lower(), p["category"])
+            self.card_widgets[p["id"]] = (card, p["name"].lower(), p["category"])
 
     def _on_search_changed(self, event=None):
         self.search_query = self.search_entry.get().strip().lower()
@@ -155,13 +155,24 @@ class GamesView(ctk.CTkFrame):
         self._apply_filter()
 
     def _apply_filter(self):
-        """Instantly maps/unmaps pre-existing single-layer rows without canvas overhead."""
+        """Arranges matching cards into a 2-column Bento Grid instantly."""
+        # Unmap all currently placed grid items
         for p in GAME_PRESETS:
-            row, name_lower, category = self.card_widgets[p["id"]]
+            card, _, _ = self.card_widgets[p["id"]]
+            card.grid_forget()
+
+        # Find matching items
+        matching = []
+        for p in GAME_PRESETS:
+            card, name_lower, category = self.card_widgets[p["id"]]
             matches_cat = (self.preset_filter == "Все" or category == self.preset_filter)
             matches_search = (not self.search_query or self.search_query in name_lower)
-
             if matches_cat and matches_search:
-                row.pack(fill="x", pady=2)
-            else:
-                row.pack_forget()
+                matching.append(card)
+
+        # Place into 2-Column Bento Grid
+        for idx, card in enumerate(matching):
+            row_idx = idx // 2
+            col_idx = idx % 2
+            padx = (0, 6) if col_idx == 0 else (6, 0)
+            card.grid(row=row_idx, column=col_idx, sticky="ew", padx=padx, pady=4)
