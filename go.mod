@@ -1,6 +1,6 @@
 module github.com/lanforge/lanforge
 
-go 1.26.1
+go 1.24.0
 
 require (
 	github.com/charmbracelet/bubbles v0.20.0
