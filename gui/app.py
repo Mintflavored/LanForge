@@ -1,5 +1,5 @@
 """
-LANForge Desktop Application Entrypoint (Ultra-Fast Opaque View Switching)
+LANForge Desktop Application Entrypoint (Ultra-Fast Atomic View Switching)
 """
 
 import os
@@ -47,7 +47,7 @@ class LANForgeApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        # Top Navigation Bar Component (with animated sliding pill)
+        # Top Navigation Bar Component
         self.nav_bar = TopNavBar(
             self,
             on_tab_selected=self._show_tab,
@@ -62,7 +62,7 @@ class LANForgeApp(ctk.CTk):
         self.main_container.grid_columnconfigure(0, weight=1)
         self.main_container.grid_rowconfigure(0, weight=1)
 
-        # Instantiate View Components into the exact same grid cell
+        # Instantiate View Components
         self.views = {
             "overview": OverviewView(
                 self.main_container,
@@ -91,12 +91,14 @@ class LANForgeApp(ctk.CTk):
         self.active_tab = tab_id
         self.nav_bar.set_active_tab(tab_id)
 
-        # Atomic 0ms switch: map active view, remove others from paint tree
+        # Atomic switch: map active view, remove others from paint tree
         for name, view in self.views.items():
             if name == tab_id:
                 view.grid(row=0, column=0, sticky="nsew")
             else:
                 view.grid_remove()
+        
+        self.update_idletasks()
 
     def show_toast(self, text, toast_type="orange"):
         """Displays floating animated toast notification."""
