@@ -575,6 +575,22 @@
       border-color: var(--accent);
     }
 
+    /* SCROLLBAR STYLING */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--card);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+
     /* CHAT STREAM */
     .chat-container {
       display: flex;
@@ -625,11 +641,11 @@
     </div>
 
     <nav class="nav-tabs">
-      <button class="nav-btn active" onclick="switchTab('overview')">Обзор</button>
-      <button class="nav-btn" onclick="switchTab('games')">Игры</button>
-      <button class="nav-btn" onclick="switchTab('radar')">LAN Радар</button>
-      <button class="nav-btn" onclick="switchTab('chat')">Чат</button>
-      <button class="nav-btn" onclick="switchTab('diag')">Диагностика</button>
+      <button class="nav-btn active" id="nav-btn-overview" onclick="switchTab('overview')">Обзор</button>
+      <button class="nav-btn" id="nav-btn-games" onclick="switchTab('games')">Игры</button>
+      <button class="nav-btn" id="nav-btn-radar" onclick="switchTab('radar')">LAN Радар</button>
+      <button class="nav-btn" id="nav-btn-chat" onclick="switchTab('chat')">Чат <span id="chat-unread-dot" style="display:none; width:6px; height:6px; background:var(--accent); border-radius:50%; margin-left:4px; box-shadow:0 0 6px var(--accent);"></span></button>
+      <button class="nav-btn" id="nav-btn-diag" onclick="switchTab('diag')">Диагностика</button>
     </nav>
 
     <div class="nav-actions">
@@ -944,6 +960,8 @@
     let ws = null;
     let pingTimer = null;
     let pingHistory = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    let discoveredGames = [];
+    let currentTab = "overview";
 
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
@@ -954,6 +972,18 @@
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModals();
       });
+
+      // Browser AudioContext Autoplay Unlock on First User Interaction
+      const unlockAudio = () => {
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+      };
+      document.addEventListener('click', unlockAudio);
+      document.addEventListener('keydown', unlockAudio);
     });
 
     // WEBSOCKET CLIENT
@@ -1183,6 +1213,10 @@
             if (msg.message.fromPeerId !== myId) {
               playSound("chat");
               notifyNative("Чат: " + msg.message.fromNick, msg.message.text);
+              if (currentTab !== "chat") {
+                const unreadDot = document.getElementById("chat-unread-dot");
+                if (unreadDot) unreadDot.style.display = "inline-block";
+              }
             }
           }
           break;
@@ -1203,6 +1237,13 @@
         case "discovered_game":
           if (msg.game) {
             playSound("create");
+            const existingIdx = discoveredGames.findIndex(g => g.ip === msg.game.ip && g.port === msg.game.port);
+            if (existingIdx >= 0) {
+              discoveredGames[existingIdx] = msg.game;
+            } else {
+              discoveredGames.push(msg.game);
+            }
+            renderRadarGames();
             showToast("Обнаружен LAN-мир: " + msg.game.name);
             notifyNative("LAN Радар", "Обнаружен мир: " + msg.game.name);
           }
@@ -1219,7 +1260,6 @@
       pingHistory.push(rtt);
       if (pingHistory.length > 20) pingHistory.shift();
 
-      // Calculate Jitter (average delta between successive samples)
       let sumDelta = 0;
       for (let i = 1; i < pingHistory.length; i++) {
         sumDelta += Math.abs(pingHistory[i] - pingHistory[i - 1]);
@@ -1233,10 +1273,8 @@
       document.getElementById("my-jitter-lbl").innerText = "±" + jitter + " ms";
       document.getElementById("metric-minmax").innerText = `${minPing} / ${maxPing} ms`;
 
-      // Update Sparkline SVG Path
       renderSparkline();
 
-      // Color coding
       const pingLbl = document.getElementById("my-ping-lbl");
       const pathEl = document.getElementById("sparkline-path");
       if (rtt < 50) {
@@ -1298,7 +1336,6 @@
       btn.style.opacity = "0.6";
       statusEl.innerText = "Параллельный опрос 9 глобальных узлов...";
 
-      // Reset all tiles to animated testing indicator
       STUN_SERVERS.forEach((_, idx) => {
         const valEl = document.getElementById("stun-val-" + idx);
         if (valEl) {
@@ -1313,9 +1350,8 @@
         btn.disabled = false;
         btn.style.opacity = "1";
         statusEl.innerText = "Тест завершен";
-      }, 3500);
+      }, 4000);
 
-      // Primary: Direct Fast REST Endpoint with instant fallback
       fetch("http://127.0.0.1:8787/api/probe-stun")
         .then(res => res.json())
         .then(data => {
@@ -1357,14 +1393,26 @@
 
     // UI RENDERERS
     function switchTab(tabId) {
+      currentTab = tabId;
       document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
       document.querySelectorAll(".view-pane").forEach(p => p.classList.remove("active"));
 
       const targetPane = document.getElementById("view-" + tabId);
       if (targetPane) targetPane.classList.add("active");
 
-      const btn = Array.from(document.querySelectorAll(".nav-btn")).find(b => b.getAttribute("onclick").includes(tabId));
+      const btn = document.getElementById("nav-btn-" + tabId);
       if (btn) btn.classList.add("active");
+
+      if (tabId === "chat") {
+        const unreadDot = document.getElementById("chat-unread-dot");
+        if (unreadDot) unreadDot.style.display = "none";
+        setTimeout(() => {
+          const input = document.getElementById("chat-input-field");
+          if (input) input.focus();
+          const box = document.getElementById("chat-messages-container");
+          if (box) box.scrollTop = box.scrollHeight;
+        }, 50);
+      }
     }
 
     function renderPresets() {
@@ -1414,23 +1462,61 @@
       filterGames();
     }
 
+    function renderRadarGames() {
+      const list = document.getElementById("radar-list");
+      if (!discoveredGames || discoveredGames.length === 0) {
+        list.innerHTML = `
+          <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 40px;">
+            Активных LAN-миров в сети пока не обнаружено.<br>Откройте мир для сети в Minecraft или запустите локальный сервер.
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = "";
+      discoveredGames.forEach(g => {
+        const card = document.createElement("div");
+        card.className = "peer-row";
+        card.style.padding = "10px 14px";
+        card.style.marginBottom = "8px";
+        const addrStr = `${g.ip || '10.42.0.1'}:${g.port}`;
+        card.innerHTML = `
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="online-dot"></span>
+              <span style="font-size: 13px; font-weight: 700;">${escapeHtml(g.name || "Локальная игра")}</span>
+              <span class="p2p-badge p2p-badge-direct">${escapeHtml(g.protocol || "LAN")}</span>
+            </div>
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-top: 3px;">
+              Хост: ${escapeHtml(addrStr)} ${g.extra ? `• ${escapeHtml(g.extra)}` : ''}
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="copyText('${addrStr}')">Скопировать IP 📋</button>
+        `;
+        list.appendChild(card);
+      });
+    }
+
     function updateRoomUI() {
       const standby = document.getElementById("room-standby");
       const active = document.getElementById("room-active");
       const myIpLbl = document.getElementById("my-ip-lbl");
       const topoPeers = document.getElementById("topo-peers-count");
+      const topoLocalIp = document.getElementById("topo-local-ip");
 
       if (!currentRoom) {
         standby.style.display = "block";
         active.style.display = "none";
         myIpLbl.innerText = "10.42.0.X";
         if (topoPeers) topoPeers.innerText = "0 активных";
+        if (topoLocalIp) topoLocalIp.innerText = "127.0.0.1";
         return;
       }
 
       standby.style.display = "none";
       active.style.display = "flex";
       myIpLbl.innerText = myVirtualIp;
+      if (topoLocalIp) topoLocalIp.innerText = myVirtualIp;
 
       document.getElementById("room-name-lbl").innerText = currentRoom.name || "Комната";
       document.getElementById("room-code-btn").innerText = (currentRoom.code || "LAN-XXXX") + " 📋";
@@ -1501,7 +1587,13 @@
 
     // ACTIONS & MODALS
     function openCreateModal(presetId = null) {
-      if (presetId) document.getElementById("create-game-preset").value = presetId;
+      if (presetId) {
+        document.getElementById("create-game-preset").value = presetId;
+        const p = GAME_PRESETS.find(x => x.id === presetId);
+        if (p) {
+          document.getElementById("create-room-name").value = "Сервер " + p.name;
+        }
+      }
       document.getElementById("create-modal").classList.add("active");
       setTimeout(() => document.getElementById("create-room-name").focus(), 50);
     }
@@ -1562,7 +1654,14 @@
     }
 
     function copyRoomCode() {
-      if (currentRoom) copyText(currentRoom.code);
+      if (!currentRoom) return;
+      copyText(currentRoom.code);
+      const btn = document.getElementById("room-code-btn");
+      if (btn) {
+        const orig = btn.innerText;
+        btn.innerText = (currentRoom.code || "LAN-XXXX") + " ✓";
+        setTimeout(() => { if (btn) btn.innerText = orig; }, 1200);
+      }
     }
 
     function copyMyIp() {
