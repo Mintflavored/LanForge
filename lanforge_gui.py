@@ -1,21 +1,49 @@
-"""
-LANForge Desktop Launcher (v1.6.6)
+r"""
+LANForge Desktop Launcher (v1.6.7)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
 - Hybrid Cloud & Local Signaling support
+- Unified Rotating File Logger (%APPDATA%\LANForge\lanforge.log)
 """
 
-__version__ = "1.6.6"
+__version__ = "1.6.7"
 
 import os
 import sys
 import json
 import time
 import socket
+import logging
+import platform
 import subprocess
 import atexit
 import threading
+from logging.handlers import RotatingFileHandler
+
+# AppData configuration & logs directory
+app_data_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "LANForge")
+os.makedirs(app_data_dir, exist_ok=True)
+CONFIG_FILE = os.path.join(app_data_dir, "config.json")
+LOG_FILE = os.path.join(app_data_dir, "lanforge.log")
+
+# Setup Rotating File Logger
+logger = logging.getLogger("LANForge")
+logger.setLevel(logging.DEBUG)
+log_handler = RotatingFileHandler(
+    LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+)
+formatter = logging.Formatter(
+    "[%(asctime)s.%(msecs)03d] [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+log_handler.setFormatter(formatter)
+logger.addHandler(log_handler)
+
+logger.info(f"=== LANForge v{__version__} Starting ===")
+logger.info(f"OS: {platform.platform()} ({platform.architecture()[0]})")
+logger.info(f"Python: {sys.version.split()[0]} | Executable: {sys.executable}")
+logger.info(f"AppData Directory: {app_data_dir}")
 
 # Ensure local loopback connections completely bypass system proxies & Clash Verge
 PROXY_BYPASS = "localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12,*.local,10.42.*"
@@ -68,7 +96,8 @@ def start_backend_server():
     global server_proc
     try:
         if is_port_open("127.0.0.1", 8787):
-            return  # Server already running
+            logger.info("Local Go server already active on 127.0.0.1:8787")
+            return
 
         candidates = []
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -87,23 +116,46 @@ def start_backend_server():
                 break
 
         if server_bin:
+            logger.info(f"Spawning local Go server binary: {server_bin}")
             creation_flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
             server_proc = subprocess.Popen(
                 [server_bin, "-port", "8787"],
                 cwd=os.path.dirname(server_bin),
-                creationflags=creation_flags
+                creationflags=creation_flags,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
             )
+
+            def pipe_stream(stream, is_err=False):
+                try:
+                    for line in iter(stream.readline, b''):
+                        msg = line.decode('utf-8', errors='ignore').strip()
+                        if msg:
+                            if is_err:
+                                logger.error(f"[GoServer] {msg}")
+                            else:
+                                logger.info(f"[GoServer] {msg}")
+                except Exception:
+                    pass
+
+            threading.Thread(target=pipe_stream, args=(server_proc.stdout, False), daemon=True).start()
+            threading.Thread(target=pipe_stream, args=(server_proc.stderr, True), daemon=True).start()
+
             for _ in range(30):
                 time.sleep(0.1)
                 if is_port_open("127.0.0.1", 8787):
+                    logger.info("Local Go server successfully listening on 127.0.0.1:8787")
                     break
+        else:
+            logger.warning("No local lanforge-server.exe binary found in candidates.")
     except Exception as e:
-        print(f"[Backend Spawn Error] {e}")
+        logger.error(f"[Backend Spawn Error] {e}")
 
 def stop_backend_server():
     global server_proc
     if server_proc:
         try:
+            logger.info("Terminating local Go server...")
             server_proc.terminate()
             server_proc.wait(timeout=1.0)
         except Exception:
@@ -115,31 +167,60 @@ def stop_backend_server():
 
 atexit.register(stop_backend_server)
 
-# AppData configuration directory for persistent storage
-app_data_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "LANForge")
-os.makedirs(app_data_dir, exist_ok=True)
-CONFIG_FILE = os.path.join(app_data_dir, "config.json")
-
 def load_user_config():
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                cfg = json.load(f)
+                logger.info(f"Loaded config: {cfg}")
+                return cfg
     except Exception as e:
-        print(f"[Config Read Error] {e}")
+        logger.error(f"[Config Read Error] {e}")
     return {}
 
 def save_user_config(data):
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"Saved config: {data}")
         return True
     except Exception as e:
-        print(f"[Config Write Error] {e}")
+        logger.error(f"[Config Write Error] {e}")
         return False
 
 class JsApi:
-    """JS Bridge allowing UI to interact with Windows Native features and persistent config."""
+    """JS Bridge allowing UI to interact with Windows Native features, persistent config & logs."""
+
+    def log(self, level, tag, message):
+        lvl = str(level).lower()
+        text = f"[{tag}] {message}"
+        if lvl == "error":
+            logger.error(text)
+        elif lvl in ("warn", "warning"):
+            logger.warning(text)
+        elif lvl == "debug":
+            logger.debug(text)
+        else:
+            logger.info(text)
+
+    def open_log_dir(self):
+        try:
+            os.startfile(app_data_dir)
+            logger.info(f"Opened log directory: {app_data_dir}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to open log dir: {e}")
+            return False
+
+    def get_log_content(self, max_lines=250):
+        try:
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = f.readlines()
+                    return "".join(lines[-max_lines:])
+        except Exception as e:
+            return f"Error reading log file: {e}"
+        return "Лог-файл пуст."
 
     def get_config(self):
         return load_user_config()
@@ -163,7 +244,7 @@ class JsApi:
                 game_preset=game_preset
             )
         except Exception as e:
-            print(f"[Discord RPC Error] {e}")
+            logger.warning(f"[Discord RPC Error] {e}")
 
     def update_tray(self, status_text, my_ip):
         if tray:
@@ -184,6 +265,7 @@ def on_show_window():
 
 def on_quit_app():
     global main_window
+    logger.info("Application quitting requested.")
     stop_backend_server()
     if main_window:
         try:
@@ -207,7 +289,7 @@ def main():
     tray.start()
 
     # Initial Discord RPC Status
-    discord.set_activity("В главном меню", "P2P Virtual Gaming Hub v1.6.6")
+    discord.set_activity("В главном меню", f"P2P Virtual Gaming Hub v{__version__}")
 
     api = JsApi()
 
@@ -224,6 +306,7 @@ def main():
     )
 
     def on_closed():
+        logger.info("Main window closed event triggered.")
         if tray:
             tray.stop()
         stop_backend_server()

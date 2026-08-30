@@ -1015,6 +1015,14 @@
         💡 <b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Никаких настроек портов и IP не требуется!
       </div>
 
+      <div style="margin-top: 14px; padding: 10px; background: #121215; border: 1px solid var(--border); border-radius: 6px;">
+        <label class="card-title-badge" style="margin-bottom: 6px;">ДИАГНОСТИКА И ЛОГИ СИСТЕМЫ</label>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="flex: 1; font-size: 11px;" onclick="openLogDir()">📁 Открыть папку с логами</button>
+          <button class="btn btn-secondary" style="flex: 1; font-size: 11px;" onclick="copyLogContent()">📋 Скопировать лог</button>
+        </div>
+      </div>
+
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
         <button class="btn btn-primary" onclick="saveSettings()">Сохранить настройки</button>
@@ -1023,7 +1031,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.6</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.7</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1033,6 +1041,39 @@
   </div>
 
   <script>
+    // TACTICAL UNIFIED LOGGER (Pipes to AppData/lanforge.log)
+    const Logger = {
+      log(level, tag, msg) {
+        const text = (typeof msg === "object") ? JSON.stringify(msg) : String(msg);
+        console.log(`[${tag}]`, msg);
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.log) {
+          window.pywebview.api.log(level, tag, text);
+        }
+      },
+      info(tag, msg) { this.log("info", tag, msg); },
+      warn(tag, msg) { this.log("warn", tag, msg); },
+      error(tag, msg) { this.log("error", tag, msg); },
+      debug(tag, msg) { this.log("debug", tag, msg); }
+    };
+
+    function openLogDir() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.open_log_dir) {
+        window.pywebview.api.open_log_dir();
+        showToast("Открыта папка с логами");
+      }
+    }
+
+    function copyLogContent() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_log_content) {
+        window.pywebview.api.get_log_content().then(content => {
+          copyText(content);
+          showToast("Логи скопированы в буфер обмена");
+        }).catch(err => {
+          showToast("Ошибка чтения логов: " + err);
+        });
+      }
+    }
+
     // PRESETS CATALOG
     const GAME_PRESETS = [
       { id: "minecraft_java", name: "Minecraft (Java Edition)", category: "Песочницы", port: 25565, protocol: "TCP", hint: "Сетевая игра -> Прямое подключение -> {HOST_IP}:25565" },
@@ -1076,6 +1117,7 @@
 
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
+      Logger.info("Init", `DOM loaded. Current Nick: ${myNick}, Mode: ${currentServerMode}, Server: ${currentServerUrl}`);
       renderPresets();
       renderStunMatrix();
       connectWebSocket(currentServerUrl);
@@ -1151,24 +1193,25 @@
       }
 
       currentServerUrl = url;
-      console.log("[WS] Connecting to Signaling Engine at:", currentServerUrl);
+      Logger.info("WS", `Connecting to signaling hub at: ${currentServerUrl}`);
       
       try {
         ws = new WebSocket(currentServerUrl);
       } catch (err) {
-        console.error("[WS] Connection creation failed:", err);
+        Logger.error("WS", `WebSocket constructor error: ${err}`);
         updateConnectionStatus(false);
         return;
       }
 
       ws.onopen = () => {
         connectionAttempts = 0;
-        console.log("[WS] Connected to Signaling Engine at:", currentServerUrl);
+        Logger.info("WS", `Successfully connected to: ${currentServerUrl}`);
         startPingHeartbeat();
         updateConnectionStatus(true);
 
         // If client had an active room session, re-sync with the server
         if (currentRoom && currentRoom.code) {
+          Logger.info("Room", `Re-syncing existing room session: ${currentRoom.code}`);
           sendWS({
             type: "join_room",
             code: currentRoom.code,
@@ -1182,18 +1225,19 @@
           const msg = JSON.parse(event.data);
           handleServerMessage(msg);
         } catch (e) {
-          console.error("[WS] Parse error:", e);
+          Logger.error("WS", `Failed to parse message: ${e} | raw: ${event.data}`);
         }
       };
 
       ws.onerror = (err) => {
-        console.warn("[WS] Connection error:", err);
+        Logger.warn("WS", `Socket error event triggered`);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         updateConnectionStatus(false);
         connectionAttempts++;
         if (pingTimer) clearInterval(pingTimer);
+        Logger.warn("WS", `Socket closed (code: ${event ? event.code : 'unknown'}, reason: ${event ? event.reason : 'none'}). Reconnecting in 2.5s...`);
 
         // Retry connection without spamming or overwriting user settings
         setTimeout(() => connectWebSocket(currentServerUrl), 2500);
@@ -1202,9 +1246,13 @@
 
     function sendWS(payload, notifyOnError = false) {
       if (ws && ws.readyState === WebSocket.OPEN) {
+        if (payload.type !== "ping") {
+          Logger.info("SendWS", payload);
+        }
         ws.send(JSON.stringify(payload));
         return true;
       }
+      Logger.warn("SendWS", `Cannot send (readyState=${ws ? ws.readyState : 'null'}): ${JSON.stringify(payload)}`);
       if (notifyOnError) {
         showToast("⚠️ Нет связи с сервером! Подключение...");
         connectWebSocket(currentServerUrl);
@@ -1337,6 +1385,10 @@
 
     // SERVER MESSAGE DISPATCHER
     function handleServerMessage(msg) {
+      if (msg.type !== "pong") {
+        Logger.info("RecvWS", msg);
+      }
+
       switch (msg.type) {
         case "room_created":
         case "room_joined":
@@ -1885,6 +1937,8 @@
       const passInput = document.getElementById("create-room-pass");
       const password = passInput ? passInput.value : "";
 
+      Logger.info("Action", `Creating room: "${name}", preset: ${preset}, nick: ${myNick}, server: ${currentServerUrl}`);
+
       const sent = sendWS({
         type: "create_room",
         name: name,
@@ -1908,6 +1962,8 @@
       }
       const passInput = document.getElementById("join-room-pass");
       const password = passInput ? passInput.value : "";
+
+      Logger.info("Action", `Joining room code: "${code}", nick: ${myNick}, server: ${currentServerUrl}`);
 
       const sent = sendWS({
         type: "join_room",
