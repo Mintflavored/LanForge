@@ -1,14 +1,14 @@
 r"""
-LANForge Desktop Launcher (v1.7.1)
+LANForge Desktop Launcher (v1.7.2)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
 - Hybrid Cloud & Local Signaling support
 - Unified Rotating File Logger (%APPDATA%\LANForge\lanforge.log)
-- Zero-Driver P2P Game Data Tunnel with dynamic port sync & heartbeat
+- Zero-Driver P2P Game Data Tunnel with auto-reconnect & session recovery
 """
 
-__version__ = "1.7.1"
+__version__ = "1.7.2"
 
 import os
 import sys

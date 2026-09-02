@@ -29,7 +29,7 @@ type EngineConfig struct {
 	GamePort     int    // Host: local game port (e.g. 5000); Client: local listen port (e.g. 25565)
 }
 
-// TunnelEngine manages TCP listening/dialing and multiplexing over a WebSocket tunnel.
+// TunnelEngine manages TCP listening/dialing and multiplexing over a resilient WebSocket tunnel.
 type TunnelEngine struct {
 	cfg         EngineConfig
 	wsConn      *websocket.Conn
@@ -55,13 +55,13 @@ func NewTunnelEngine(cfg EngineConfig) *TunnelEngine {
 	}
 }
 
-// Start launches the tunnel engine.
+// Start launches the tunnel engine with background auto-reconnect.
 func (e *TunnelEngine) Start() error {
 	if !e.running.CompareAndSwap(false, true) {
 		return fmt.Errorf("tunnel already running")
 	}
 
-	// 1. Establish WebSocket tunnel connection to signaling hub
+	// 1. Verify hub URL
 	u, err := url.Parse(e.cfg.HubURL)
 	if err != nil {
 		e.running.Store(false)
@@ -74,39 +74,25 @@ func (e *TunnelEngine) Start() error {
 	}
 	wsURL := fmt.Sprintf("%s://%s/ws", wsScheme, u.Host)
 
-	log.Printf("[Tunnel] Connecting to hub at %s for room %s (host=%v, myPeer=%s)...", wsURL, e.cfg.RoomCode, e.cfg.IsHost, e.cfg.MyPeerID)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	// 2. Initial connection check
+	initialConn, err := e.dialAndRegister(wsURL)
 	if err != nil {
 		e.running.Store(false)
 		return fmt.Errorf("failed to dial hub websocket: %w", err)
 	}
-	e.wsConn = conn
+	e.wsConn = initialConn
 
-	// Register tunnel role with the hub
-	regMsg := map[string]interface{}{
-		"type":         "tunnel_register",
-		"code":         e.cfg.RoomCode,
-		"peerId":       e.cfg.MyPeerID,
-		"isHost":       e.cfg.IsHost,
-		"targetPeerId": e.cfg.TargetPeerID,
-	}
-	if err := e.sendJSON(regMsg); err != nil {
-		e.Stop()
-		return fmt.Errorf("failed to register tunnel session: %w", err)
-	}
+	// 3. Start connection manager with auto-reconnect
+	go e.manageWsConnection(wsURL, initialConn)
 
-	// 2. Start reader loop from WebSocket
-	go e.readWsLoop()
-
-	// 3. Start persistent Ping-Heartbeat loop (prevents Render 60s idle disconnect)
+	// 4. Start persistent Ping-Heartbeat loop
 	go e.pingLoop()
 
-	// 4. If Client (Friend), start local TCP listener for Minecraft
+	// 5. If Client (Friend), start local TCP listener for Minecraft
 	if !e.cfg.IsHost {
 		listenAddr := fmt.Sprintf("127.0.0.1:%d", e.cfg.GamePort)
 		l, err := net.Listen("tcp", listenAddr)
 		if err != nil {
-			// If preferred port is busy, fallback to dynamic port
 			listenAddr = "127.0.0.1:0"
 			l, err = net.Listen("tcp", listenAddr)
 			if err != nil {
@@ -125,9 +111,98 @@ func (e *TunnelEngine) Start() error {
 	return nil
 }
 
-// pingLoop sends regular ping frames every 15s to keep the Render cloud connection alive
+func (e *TunnelEngine) dialAndRegister(wsURL string) (*websocket.Conn, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	regMsg := map[string]interface{}{
+		"type":         "tunnel_register",
+		"code":         e.cfg.RoomCode,
+		"peerId":       e.cfg.MyPeerID,
+		"isHost":       e.cfg.IsHost,
+		"targetPeerId": e.cfg.TargetPeerID,
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+// manageWsConnection monitors the WebSocket and auto-reconnects with session preservation
+func (e *TunnelEngine) manageWsConnection(wsURL string, activeConn *websocket.Conn) {
+	conn := activeConn
+
+	for {
+		if !e.running.Load() {
+			return
+		}
+
+		if conn == nil {
+			log.Printf("[Tunnel] Auto-reconnecting to hub at %s (room %s)...", wsURL, e.cfg.RoomCode)
+			newConn, err := e.dialAndRegister(wsURL)
+			if err != nil {
+				select {
+				case <-e.stopChan:
+					return
+				case <-time.After(1500 * time.Millisecond):
+					continue
+				}
+			}
+			e.wsWriteMu.Lock()
+			e.wsConn = newConn
+			conn = newConn
+			e.wsWriteMu.Unlock()
+			log.Printf("[Tunnel] Hub connection restored and re-registered successfully!")
+		}
+
+		// Read frames until connection breaks
+		e.readWsLoop(conn)
+
+		// Disconnected: clean up this socket and loop back to reconnect
+		e.wsWriteMu.Lock()
+		if e.wsConn == conn {
+			_ = conn.Close()
+			e.wsConn = nil
+		}
+		conn = nil
+		e.wsWriteMu.Unlock()
+
+		select {
+		case <-e.stopChan:
+			return
+		case <-time.After(500 * time.Millisecond):
+			// Immediate reconnect attempt
+		}
+	}
+}
+
+// readWsLoop reads binary frames from the active connection until EOF or error
+func (e *TunnelEngine) readWsLoop(conn *websocket.Conn) {
+	for {
+		msgType, raw, err := conn.ReadMessage()
+		if err != nil {
+			select {
+			case <-e.stopChan:
+				return
+			default:
+				log.Printf("[Tunnel] Hub connection lost: %v (auto-reconnecting...)", err)
+				return
+			}
+		}
+
+		if msgType == websocket.BinaryMessage {
+			e.handleBinaryFrame(raw)
+		}
+	}
+}
+
+// pingLoop sends regular ping frames every 12s to keep cloud proxies alive
 func (e *TunnelEngine) pingLoop() {
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(12 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -137,7 +212,7 @@ func (e *TunnelEngine) pingLoop() {
 		case <-ticker.C:
 			e.wsWriteMu.Lock()
 			if e.wsConn != nil {
-				_ = e.wsConn.WriteControl(websocket.PingMessage, []byte("heartbeat"), time.Now().Add(5*time.Second))
+				_ = e.wsConn.WriteControl(websocket.PingMessage, []byte("keepalive"), time.Now().Add(5*time.Second))
 			}
 			e.wsWriteMu.Unlock()
 		}
@@ -169,28 +244,37 @@ func (e *TunnelEngine) Stop() {
 	}
 	e.streamsMu.Unlock()
 
+	e.wsWriteMu.Lock()
 	if e.wsConn != nil {
 		_ = e.wsConn.Close()
+		e.wsConn = nil
 	}
-	log.Printf("[Tunnel] Engine stopped.")
-}
+	e.wsWriteMu.Unlock()
 
-func (e *TunnelEngine) sendJSON(v interface{}) error {
-	e.wsWriteMu.Lock()
-	defer e.wsWriteMu.Unlock()
-	if e.wsConn == nil {
-		return fmt.Errorf("websocket closed")
-	}
-	return e.wsConn.WriteJSON(v)
+	log.Printf("[Tunnel] Engine stopped cleanly.")
 }
 
 // sendFrameTo sends:
 // [targetLen:1B][targetPeerID:NB][senderLen:1B][senderPeerID:NB][frameType:1B][streamId:4B][payload...]
+// If the tunnel is momentarily reconnecting, it waits up to 3s before failing.
 func (e *TunnelEngine) sendFrameTo(targetPeerID string, frameType byte, streamID uint32, payload []byte) error {
+	// Wait briefly if connection is in middle of 1s auto-reconnect
+	var activeConn *websocket.Conn
+	for i := 0; i < 30; i++ {
+		e.wsWriteMu.Lock()
+		activeConn = e.wsConn
+		e.wsWriteMu.Unlock()
+		if activeConn != nil || !e.running.Load() {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	e.wsWriteMu.Lock()
 	defer e.wsWriteMu.Unlock()
+
 	if e.wsConn == nil {
-		return fmt.Errorf("websocket closed")
+		return fmt.Errorf("websocket currently reconnecting")
 	}
 
 	targetBytes := []byte(targetPeerID)
@@ -262,7 +346,9 @@ func (e *TunnelEngine) acceptGameClients() {
 				n, err := c.Read(buf)
 				if n > 0 {
 					if err := e.sendFrameTo(targetHost, FrameData, id, buf[:n]); err != nil {
-						return
+						// Transient send error during reconnection: continue attempting
+						time.Sleep(50 * time.Millisecond)
+						continue
 					}
 				}
 				if err != nil {
@@ -270,28 +356,6 @@ func (e *TunnelEngine) acceptGameClients() {
 				}
 			}
 		}(streamID, target, conn)
-	}
-}
-
-// readWsLoop handles incoming binary tunnel frames from the hub
-func (e *TunnelEngine) readWsLoop() {
-	defer e.Stop()
-
-	for {
-		msgType, raw, err := e.wsConn.ReadMessage()
-		if err != nil {
-			select {
-			case <-e.stopChan:
-				return
-			default:
-				log.Printf("[Tunnel] Hub connection lost: %v", err)
-				return
-			}
-		}
-
-		if msgType == websocket.BinaryMessage {
-			e.handleBinaryFrame(raw)
-		}
 	}
 }
 
@@ -351,7 +415,8 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 					n, err := c.Read(buf)
 					if n > 0 {
 						if err := e.sendFrameTo(targetClient, FrameData, id, buf[:n]); err != nil {
-							return
+							time.Sleep(50 * time.Millisecond)
+							continue
 						}
 					}
 					if err != nil {

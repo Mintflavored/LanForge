@@ -1054,7 +1054,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.7.1</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.7.2</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -2118,6 +2118,7 @@
     function startTunnelTelemetry() {
       if (tunnelPollTimer) clearInterval(tunnelPollTimer);
       tunnelPollTimer = setInterval(() => {
+        if (!currentRoom) return;
         fetch("http://127.0.0.1:8787/api/tunnel/status")
           .then(res => res.json())
           .then(status => {
@@ -2126,6 +2127,10 @@
               const downKb = (status.bytesDown / 1024).toFixed(1);
               const lbl = document.getElementById("tunnel-traffic-lbl");
               if (lbl) lbl.textContent = `↑ ${upKb} КБ | ↓ ${downKb} КБ`;
+            } else if (currentRoom) {
+              // Watchdog: auto-restart tunnel if it stopped unexpectedly
+              Logger.warn("Watchdog", "Tunnel stopped unexpectedly, recovering...");
+              startTunnelForRoom();
             }
           })
           .catch(() => {});
