@@ -302,6 +302,18 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 			Message: chat,
 		}, "")
 
+	case "update_room_port":
+		if peer.RoomCode == "" || msg.Port <= 0 {
+			return
+		}
+		room := s.Manager.GetRoom(peer.RoomCode)
+		if room != nil {
+			room.Broadcast(protocol.ServerMessage{
+				Type: "room_port_updated",
+				Port: msg.Port,
+			}, "")
+		}
+
 	case "update_status":
 		if peer.RoomCode == "" {
 			return

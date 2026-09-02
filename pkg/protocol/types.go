@@ -68,6 +68,7 @@ type ClientMessage struct {
 	PacketLoss     *float64        `json:"packetLoss,omitempty"`
 	ConnectionType string          `json:"connectionType,omitempty"`
 	Timestamp      int64           `json:"timestamp,omitempty"`
+	Port           int             `json:"port,omitempty"`
 }
 
 // ServerMessage is sent from Server to Client.
@@ -88,4 +89,5 @@ type ServerMessage struct {
 	ClientTimestamp int64             `json:"clientTimestamp,omitempty"`
 	ServerTimestamp int64             `json:"serverTimestamp,omitempty"`
 	StunProbes      []StunProbeResult `json:"stunProbes,omitempty"`
+	Port            int               `json:"port,omitempty"`
 }

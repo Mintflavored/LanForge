@@ -26,30 +26,32 @@ type EngineConfig struct {
 	IsHost       bool   // true if this peer is the host
 	MyPeerID     string // Client's signaling peer ID
 	TargetPeerID string // Host's peer ID (if client)
-	GamePort     int    // Host: local game port (e.g. 25565); Client: local listen port (e.g. 25565)
+	GamePort     int    // Host: local game port (e.g. 5000); Client: local listen port (e.g. 25565)
 }
 
 // TunnelEngine manages TCP listening/dialing and multiplexing over a WebSocket tunnel.
 type TunnelEngine struct {
-	cfg        EngineConfig
-	wsConn     *websocket.Conn
-	wsWriteMu  sync.Mutex
-	listener   net.Listener
-	streams    map[uint32]net.Conn
-	streamsMu  sync.RWMutex
-	nextStream uint32
-	running    atomic.Bool
-	stopChan   chan struct{}
-	BytesUp    atomic.Uint64
-	BytesDown  atomic.Uint64
+	cfg         EngineConfig
+	wsConn      *websocket.Conn
+	wsWriteMu   sync.Mutex
+	listener    net.Listener
+	streams     map[uint32]net.Conn
+	streamPeers map[uint32]string // streamID -> sender PeerID
+	streamsMu   sync.RWMutex
+	nextStream  uint32
+	running     atomic.Bool
+	stopChan    chan struct{}
+	BytesUp     atomic.Uint64
+	BytesDown   atomic.Uint64
 }
 
 // NewTunnelEngine creates a new game tunnel engine.
 func NewTunnelEngine(cfg EngineConfig) *TunnelEngine {
 	return &TunnelEngine{
-		cfg:      cfg,
-		streams:  make(map[uint32]net.Conn),
-		stopChan: make(chan struct{}),
+		cfg:         cfg,
+		streams:     make(map[uint32]net.Conn),
+		streamPeers: make(map[uint32]string),
+		stopChan:    make(chan struct{}),
 	}
 }
 
@@ -72,7 +74,7 @@ func (e *TunnelEngine) Start() error {
 	}
 	wsURL := fmt.Sprintf("%s://%s/ws", wsScheme, u.Host)
 
-	log.Printf("[Tunnel] Connecting to hub at %s for room %s (host=%v)...", wsURL, e.cfg.RoomCode, e.cfg.IsHost)
+	log.Printf("[Tunnel] Connecting to hub at %s for room %s (host=%v, myPeer=%s)...", wsURL, e.cfg.RoomCode, e.cfg.IsHost, e.cfg.MyPeerID)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		e.running.Store(false)
@@ -96,12 +98,15 @@ func (e *TunnelEngine) Start() error {
 	// 2. Start reader loop from WebSocket
 	go e.readWsLoop()
 
-	// 3. If Client (Friend), start local TCP listener for Minecraft
+	// 3. Start persistent Ping-Heartbeat loop (prevents Render 60s idle disconnect)
+	go e.pingLoop()
+
+	// 4. If Client (Friend), start local TCP listener for Minecraft
 	if !e.cfg.IsHost {
 		listenAddr := fmt.Sprintf("127.0.0.1:%d", e.cfg.GamePort)
 		l, err := net.Listen("tcp", listenAddr)
 		if err != nil {
-			// If preferred port is busy, fallback to 25565 or dynamic
+			// If preferred port is busy, fallback to dynamic port
 			listenAddr = "127.0.0.1:0"
 			l, err = net.Listen("tcp", listenAddr)
 			if err != nil {
@@ -118,6 +123,25 @@ func (e *TunnelEngine) Start() error {
 	}
 
 	return nil
+}
+
+// pingLoop sends regular ping frames every 15s to keep the Render cloud connection alive
+func (e *TunnelEngine) pingLoop() {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-e.stopChan:
+			return
+		case <-ticker.C:
+			e.wsWriteMu.Lock()
+			if e.wsConn != nil {
+				_ = e.wsConn.WriteControl(websocket.PingMessage, []byte("heartbeat"), time.Now().Add(5*time.Second))
+			}
+			e.wsWriteMu.Unlock()
+		}
+	}
 }
 
 // GetListenPort returns the local TCP port this client is listening on.
@@ -141,6 +165,7 @@ func (e *TunnelEngine) Stop() {
 	for id, conn := range e.streams {
 		_ = conn.Close()
 		delete(e.streams, id)
+		delete(e.streamPeers, id)
 	}
 	e.streamsMu.Unlock()
 
@@ -159,25 +184,32 @@ func (e *TunnelEngine) sendJSON(v interface{}) error {
 	return e.wsConn.WriteJSON(v)
 }
 
-// sendFrame sends [targetPeerIDLen:1B][targetPeerID:NB][frameType:1B][streamId:4B][payload]
-func (e *TunnelEngine) sendFrame(frameType byte, streamID uint32, payload []byte) error {
+// sendFrameTo sends:
+// [targetLen:1B][targetPeerID:NB][senderLen:1B][senderPeerID:NB][frameType:1B][streamId:4B][payload...]
+func (e *TunnelEngine) sendFrameTo(targetPeerID string, frameType byte, streamID uint32, payload []byte) error {
 	e.wsWriteMu.Lock()
 	defer e.wsWriteMu.Unlock()
 	if e.wsConn == nil {
 		return fmt.Errorf("websocket closed")
 	}
 
-	target := e.cfg.TargetPeerID
-	targetBytes := []byte(target)
+	targetBytes := []byte(targetPeerID)
 	targetLen := byte(len(targetBytes))
 
-	totalLen := 1 + int(targetLen) + 1 + 4 + len(payload)
+	myBytes := []byte(e.cfg.MyPeerID)
+	myLen := byte(len(myBytes))
+
+	totalLen := 1 + int(targetLen) + 1 + int(myLen) + 1 + 4 + len(payload)
 	buf := make([]byte, totalLen)
 
 	buf[0] = targetLen
 	copy(buf[1:1+targetLen], targetBytes)
 
 	offset := 1 + int(targetLen)
+	buf[offset] = myLen
+	copy(buf[offset+1:offset+1+int(myLen)], myBytes)
+
+	offset += 1 + int(myLen)
 	buf[offset] = frameType
 	binary.BigEndian.PutUint32(buf[offset+1:offset+5], streamID)
 
@@ -204,23 +236,24 @@ func (e *TunnelEngine) acceptGameClients() {
 		}
 
 		streamID := atomic.AddUint32(&e.nextStream, 1)
-		log.Printf("[Tunnel Client] New game connection accepted from %s (Stream #%d)", conn.RemoteAddr(), streamID)
+		target := e.cfg.TargetPeerID
+		log.Printf("[Tunnel Client] New game connection accepted from %s (Stream #%d -> Host %s)", conn.RemoteAddr(), streamID, target)
 
 		e.streamsMu.Lock()
 		e.streams[streamID] = conn
 		e.streamsMu.Unlock()
 
 		// Send OPEN frame to Host
-		_ = e.sendFrame(FrameOpen, streamID, nil)
+		_ = e.sendFrameTo(target, FrameOpen, streamID, nil)
 
 		// Pipe TCP socket -> WebSocket
-		go func(id uint32, c net.Conn) {
+		go func(id uint32, targetHost string, c net.Conn) {
 			defer func() {
 				e.streamsMu.Lock()
 				delete(e.streams, id)
 				e.streamsMu.Unlock()
 				_ = c.Close()
-				_ = e.sendFrame(FrameClose, id, nil)
+				_ = e.sendFrameTo(targetHost, FrameClose, id, nil)
 				log.Printf("[Tunnel Client] Stream #%d closed", id)
 			}()
 
@@ -228,7 +261,7 @@ func (e *TunnelEngine) acceptGameClients() {
 			for {
 				n, err := c.Read(buf)
 				if n > 0 {
-					if err := e.sendFrame(FrameData, id, buf[:n]); err != nil {
+					if err := e.sendFrameTo(targetHost, FrameData, id, buf[:n]); err != nil {
 						return
 					}
 				}
@@ -236,7 +269,7 @@ func (e *TunnelEngine) acceptGameClients() {
 					return
 				}
 			}
-		}(streamID, conn)
+		}(streamID, target, conn)
 	}
 }
 
@@ -262,27 +295,38 @@ func (e *TunnelEngine) readWsLoop() {
 	}
 }
 
-// handleBinaryFrame decodes [frameType:1B][streamId:4B][payload]
+// handleBinaryFrame decodes [senderLen:1B][senderPeerID:NB][frameType:1B][streamId:4B][payload]
 func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
-	if len(raw) < 5 {
+	if len(raw) < 7 {
 		return
 	}
 
-	frameType := raw[0]
-	streamID := binary.BigEndian.Uint32(raw[1:5])
-	payload := raw[5:]
+	senderLen := int(raw[0])
+	if len(raw) < 1+senderLen+5 {
+		return
+	}
+	senderID := string(raw[1 : 1+senderLen])
+
+	offset := 1 + senderLen
+	frameType := raw[offset]
+	streamID := binary.BigEndian.Uint32(raw[offset+1 : offset+5])
+	payload := raw[offset+5:]
 	e.BytesDown.Add(uint64(len(payload)))
 
 	switch frameType {
 	case FrameOpen:
 		// Host receives FrameOpen: connect to local Minecraft server
 		if e.cfg.IsHost {
+			e.streamsMu.Lock()
+			e.streamPeers[streamID] = senderID
+			e.streamsMu.Unlock()
+
 			gameAddr := fmt.Sprintf("127.0.0.1:%d", e.cfg.GamePort)
-			log.Printf("[Tunnel Host] Connecting stream #%d to local Minecraft at %s...", streamID, gameAddr)
+			log.Printf("[Tunnel Host] Connecting stream #%d for peer %s to local Minecraft at %s...", streamID, senderID, gameAddr)
 			gameConn, err := net.DialTimeout("tcp", gameAddr, 2*time.Second)
 			if err != nil {
 				log.Printf("[Tunnel Host] Failed to dial local game at %s: %v", gameAddr, err)
-				_ = e.sendFrame(FrameClose, streamID, nil)
+				_ = e.sendFrameTo(senderID, FrameClose, streamID, nil)
 				return
 			}
 
@@ -291,13 +335,14 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 			e.streamsMu.Unlock()
 
 			// Pipe gameConn -> WebSocket
-			go func(id uint32, c net.Conn) {
+			go func(id uint32, targetClient string, c net.Conn) {
 				defer func() {
 					e.streamsMu.Lock()
 					delete(e.streams, id)
+					delete(e.streamPeers, id)
 					e.streamsMu.Unlock()
 					_ = c.Close()
-					_ = e.sendFrame(FrameClose, id, nil)
+					_ = e.sendFrameTo(targetClient, FrameClose, id, nil)
 					log.Printf("[Tunnel Host] Stream #%d to local game closed", id)
 				}()
 
@@ -305,7 +350,7 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 				for {
 					n, err := c.Read(buf)
 					if n > 0 {
-						if err := e.sendFrame(FrameData, id, buf[:n]); err != nil {
+						if err := e.sendFrameTo(targetClient, FrameData, id, buf[:n]); err != nil {
 							return
 						}
 					}
@@ -313,7 +358,7 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 						return
 					}
 				}
-			}(streamID, gameConn)
+			}(streamID, senderID, gameConn)
 		}
 
 	case FrameData:
@@ -329,6 +374,7 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 		conn, exists := e.streams[streamID]
 		if exists {
 			delete(e.streams, streamID)
+			delete(e.streamPeers, streamID)
 			_ = conn.Close()
 		}
 		e.streamsMu.Unlock()
