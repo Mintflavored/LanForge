@@ -56,6 +56,7 @@ type ClientMessage struct {
 	MaxPeers       int             `json:"maxPeers,omitempty"`
 	Code           string          `json:"code,omitempty"`
 	Nick           string          `json:"nick,omitempty"`
+	PeerID         string          `json:"peerId,omitempty"`
 	TargetPeerID   string          `json:"targetPeerId,omitempty"`
 	SignalType     string          `json:"signalType,omitempty"`
 	Data           json.RawMessage `json:"data,omitempty"`

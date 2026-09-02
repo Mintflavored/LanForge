@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/lanforge/lanforge/pkg/protocol"
 	"github.com/lanforge/lanforge/pkg/stun"
+	"github.com/lanforge/lanforge/pkg/tunnel"
 )
 
 var upgrader = websocket.Upgrader{
@@ -19,8 +21,10 @@ var upgrader = websocket.Upgrader{
 
 // Server encapsulates the HTTP and WebSocket signaling listener.
 type Server struct {
-	Manager *RoomManager
-	Port    int
+	Manager      *RoomManager
+	Port         int
+	activeTunnel *tunnel.TunnelEngine
+	tunnelMu     sync.Mutex
 }
 
 // NewServer creates a new signaling server.
@@ -62,6 +66,102 @@ func (s *Server) Handler() http.Handler {
 		})
 	})
 
+	mux.HandleFunc("/api/tunnel/start", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		var req struct {
+			HubURL       string `json:"hubUrl"`
+			RoomCode     string `json:"roomCode"`
+			IsHost       bool   `json:"isHost"`
+			PeerID       string `json:"peerId"`
+			TargetPeerID string `json:"targetPeerId"`
+			GamePort     int    `json:"gamePort"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		s.tunnelMu.Lock()
+		if s.activeTunnel != nil {
+			s.activeTunnel.Stop()
+			s.activeTunnel = nil
+		}
+
+		eng := tunnel.NewTunnelEngine(tunnel.EngineConfig{
+			HubURL:       req.HubURL,
+			RoomCode:     req.RoomCode,
+			IsHost:       req.IsHost,
+			MyPeerID:     req.PeerID,
+			TargetPeerID: req.TargetPeerID,
+			GamePort:     req.GamePort,
+		})
+		if err := eng.Start(); err != nil {
+			s.tunnelMu.Unlock()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.activeTunnel = eng
+		listenPort := eng.GetListenPort()
+		s.tunnelMu.Unlock()
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "ok",
+			"listenPort": listenPort,
+		})
+	})
+
+	mux.HandleFunc("/api/tunnel/stop", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		s.tunnelMu.Lock()
+		if s.activeTunnel != nil {
+			s.activeTunnel.Stop()
+			s.activeTunnel = nil
+		}
+		s.tunnelMu.Unlock()
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+		})
+	})
+
+	mux.HandleFunc("/api/tunnel/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		s.tunnelMu.Lock()
+		defer s.tunnelMu.Unlock()
+
+		if s.activeTunnel == nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"running": false,
+			})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"running":    true,
+			"listenPort": s.activeTunnel.GetListenPort(),
+			"bytesUp":    s.activeTunnel.BytesUp.Load(),
+			"bytesDown":  s.activeTunnel.BytesDown.Load(),
+		})
+	})
+
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/", s.handleWebSocket)
 
@@ -86,9 +186,24 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer s.Manager.UnregisterPeer(peer.ID)
 
 	for {
-		_, raw, err := conn.ReadMessage()
+		msgType, raw, err := conn.ReadMessage()
 		if err != nil {
 			break
+		}
+
+		if msgType == websocket.BinaryMessage {
+			if len(raw) > 1 {
+				targetLen := int(raw[0])
+				if len(raw) >= 1+targetLen {
+					targetID := string(raw[1 : 1+targetLen])
+					payload := raw[1+targetLen:]
+					targetPeer := s.Manager.GetPeer(targetID)
+					if targetPeer != nil && targetPeer.Conn != nil {
+						_ = targetPeer.Conn.WriteMessage(websocket.BinaryMessage, payload)
+					}
+				}
+			}
+			continue
 		}
 
 		var msg protocol.ClientMessage
@@ -109,6 +224,14 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 	peer.LastSeen = time.Now()
 
 	switch msg.Type {
+	case "tunnel_register":
+		if msg.PeerID != "" {
+			s.Manager.RebindPeerID(peer, msg.PeerID)
+		}
+		if msg.Code != "" {
+			peer.RoomCode = msg.Code
+		}
+
 	case "create_room":
 		room, you, err := s.Manager.CreateRoom(peer, msg.Name, msg.GamePreset, msg.Password, msg.HostNick, msg.MaxPeers)
 		if err != nil {

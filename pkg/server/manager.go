@@ -78,6 +78,23 @@ func (m *RoomManager) RegisterPeer(conn *websocket.Conn) *ConnectedPeer {
 	return peer
 }
 
+// GetPeer retrieves a peer by ID.
+func (m *RoomManager) GetPeer(peerID string) *ConnectedPeer {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.peers[peerID]
+}
+
+// RebindPeerID reassigns a peer's ID in the peers map.
+func (m *RoomManager) RebindPeerID(peer *ConnectedPeer, newID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.peers, peer.ID)
+	peer.ID = newID
+	peer.State.ID = newID
+	m.peers[newID] = peer
+}
+
 // UnregisterPeer removes a peer upon disconnect.
 func (m *RoomManager) UnregisterPeer(peerID string) {
 	m.mu.Lock()

@@ -748,9 +748,32 @@
               <button class="btn btn-secondary btn-sm" style="color: var(--red);" onclick="leaveRoom()">Отключиться</button>
             </div>
 
-            <div class="connect-box">
-              <span id="direct-addr-lbl" style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;">Адрес хоста: 10.42.0.1:25565</span>
-              <button class="btn btn-secondary btn-sm" onclick="copyDirectAddr()">Копировать адрес</button>
+            <!-- GAME TUNNEL BRIDGE CARD -->
+            <div id="tunnel-card" style="background: #141417; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 8px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="p2p-badge p2p-badge-direct" id="tunnel-status-badge">🟢 ИГРОВОЙ МОСТ АКТИВЕН</span>
+                  <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);" id="tunnel-game-name">MINECRAFT</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);" id="tunnel-traffic-lbl">Трафик: 0 КБ</div>
+              </div>
+
+              <!-- HOST CONTROLS -->
+              <div id="tunnel-host-panel" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="font-size: 12px; color: var(--text-muted);">Порт из Minecraft:</span>
+                <input type="number" id="host-game-port-input" value="25565" style="width: 80px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                <button class="btn btn-secondary btn-sm" onclick="applyHostGamePort()">Обновить порт</button>
+                <span style="font-size: 11px; color: var(--text-dim);">(укажи порт из чата «Мир открыт на порту XXXXX»)</span>
+              </div>
+
+              <!-- CLIENT CONTROLS -->
+              <div id="tunnel-client-panel" style="display: none; justify-content: space-between; align-items: center; gap: 8px;">
+                <div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Адрес для входа в Minecraft:</div>
+                  <div style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--green);" id="tunnel-client-addr">127.0.0.1:25565</div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="copyTunnelAddr()">📋 Скопировать для Minecraft</button>
+              </div>
             </div>
 
             <div class="card-title-badge" id="peers-count-lbl" style="margin-top: 6px;">УЧАСТНИКИ (0/16):</div>
@@ -1031,7 +1054,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.6.7</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.7.0</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1773,8 +1796,32 @@
       document.getElementById("room-code-btn").innerText = (currentRoom.code || "LAN-XXXX") + " 📋";
 
       const preset = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset) || GAME_PRESETS[0];
-      const port = preset.port;
-      document.getElementById("direct-addr-lbl").innerText = `Адрес хоста в игре:  10.42.0.1:${port}`;
+      const isHost = (myId === currentRoom.hostId);
+
+      // Manage Game Tunnel UI & Auto-start
+      const tunnelCard = document.getElementById("tunnel-card");
+      const hostPanel = document.getElementById("tunnel-host-panel");
+      const clientPanel = document.getElementById("tunnel-client-panel");
+      const gameNameEl = document.getElementById("tunnel-game-name");
+
+      if (tunnelCard && hostPanel && clientPanel) {
+        tunnelCard.style.display = "block";
+        if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "MINECRAFT";
+
+        if (isHost) {
+          hostPanel.style.display = "flex";
+          clientPanel.style.display = "none";
+        } else {
+          hostPanel.style.display = "none";
+          clientPanel.style.display = "flex";
+        }
+
+        // Auto-start tunnel bridge if not already running for this room session
+        if (!activeTunnelRoomCode || activeTunnelRoomCode !== currentRoom.code) {
+          activeTunnelRoomCode = currentRoom.code;
+          startTunnelForRoom();
+        }
+      }
 
       const peers = currentRoom.peers || [];
       document.getElementById("peers-count-lbl").innerText = `УЧАСТНИКИ (${peers.length}/${currentRoom.maxPeers || 16}):`;
@@ -1977,8 +2024,96 @@
       }
     }
 
+    // GAME TUNNEL CONTROLLER
+    let activeTunnelRoomCode = null;
+    let tunnelPollTimer = null;
+    let currentListenPort = 25565;
+
+    function startTunnelForRoom() {
+      if (!currentRoom) return;
+      const isHost = (myId === currentRoom.hostId);
+      const preset = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset) || GAME_PRESETS[0];
+      const portInput = document.getElementById("host-game-port-input");
+      let gamePort = preset.port || 25565;
+      if (portInput && portInput.value) {
+        gamePort = parseInt(portInput.value) || gamePort;
+      }
+
+      const payload = {
+        hubUrl: currentServerUrl,
+        roomCode: currentRoom.code,
+        isHost: isHost,
+        peerId: myId,
+        targetPeerId: isHost ? "" : currentRoom.hostId,
+        gamePort: gamePort
+      };
+
+      Logger.info("Tunnel", `Requesting tunnel start: isHost=${isHost}, port=${gamePort}, hub=${currentServerUrl}`);
+
+      fetch("http://127.0.0.1:8787/api/tunnel/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        Logger.info("Tunnel", `Tunnel started: ${JSON.stringify(data)}`);
+        if (data.listenPort) {
+          currentListenPort = data.listenPort;
+          const addrEl = document.getElementById("tunnel-client-addr");
+          if (addrEl) addrEl.textContent = `127.0.0.1:${data.listenPort}`;
+        }
+      })
+      .catch(err => {
+        Logger.error("Tunnel", `Failed to contact local tunnel backend: ${err}`);
+      });
+
+      startTunnelTelemetry();
+    }
+
+    function stopTunnel() {
+      if (tunnelPollTimer) {
+        clearInterval(tunnelPollTimer);
+        tunnelPollTimer = null;
+      }
+      activeTunnelRoomCode = null;
+      fetch("http://127.0.0.1:8787/api/tunnel/stop", { method: "POST" })
+        .catch(() => {});
+    }
+
+    function applyHostGamePort() {
+      const portInput = document.getElementById("host-game-port-input");
+      const port = parseInt(portInput.value) || 25565;
+      startTunnelForRoom();
+      showToast(`Порт хоста обновлен: ${port}`);
+    }
+
+    function copyTunnelAddr() {
+      const addr = `127.0.0.1:${currentListenPort}`;
+      copyText(addr);
+      showToast(`Адрес ${addr} скопирован! Вставьте в сетевой игре Minecraft`);
+    }
+
+    function startTunnelTelemetry() {
+      if (tunnelPollTimer) clearInterval(tunnelPollTimer);
+      tunnelPollTimer = setInterval(() => {
+        fetch("http://127.0.0.1:8787/api/tunnel/status")
+          .then(res => res.json())
+          .then(status => {
+            if (status.running) {
+              const upKb = (status.bytesUp / 1024).toFixed(1);
+              const downKb = (status.bytesDown / 1024).toFixed(1);
+              const lbl = document.getElementById("tunnel-traffic-lbl");
+              if (lbl) lbl.textContent = `↑ ${upKb} КБ | ↓ ${downKb} КБ`;
+            }
+          })
+          .catch(() => {});
+      }, 2000);
+    }
+
     function leaveRoom() {
       sendWS({ type: "leave_room" });
+      stopTunnel();
       currentRoom = null;
       document.getElementById("chat-messages-container").innerHTML = "";
       updateRoomUI();
