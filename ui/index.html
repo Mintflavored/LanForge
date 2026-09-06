@@ -776,6 +776,53 @@
               </div>
             </div>
 
+            <!-- STEAM P2P BRIDGE CARD -->
+            <div id="steam-p2p-card" style="display: none; background: #111622; border: 1px solid #1e3a5f; border-radius: 8px; padding: 10px; margin: 8px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="p2p-badge" style="background: rgba(30, 144, 255, 0.2); color: #38bdf8; border: 1px solid #0284c7;" id="steam-status-badge">🎮 STEAM P2P (VALVE SDR)</span>
+                  <span style="font-size: 11px; font-weight: 700; color: #94a3b8;" id="steam-self-name">AppID 480</span>
+                </div>
+                <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">SDR Ping: ~15 ms</div>
+              </div>
+
+              <!-- STEAM WARNING (IF STEAM NOT RUNNING) -->
+              <div id="steam-warning-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 8px; font-size: 11px; color: #f87171; margin-bottom: 8px;">
+                ⚠️ <b>Steam не запущен!</b> Откройте клиент Steam на компьютере и нажмите кнопку ниже:
+                <button class="btn btn-secondary btn-sm" style="margin-left: 8px; padding: 2px 6px; font-size: 10px;" onclick="refreshSteamStatus()">🔄 Проверить запуск Steam</button>
+              </div>
+
+              <!-- STEAM HOST CONTROLS -->
+              <div id="steam-host-panel" style="display: none; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="font-size: 12px; color: var(--text-muted);">Порт из игры:</span>
+                  <input type="number" id="steam-host-port-input" value="25565" style="width: 80px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                  <button class="btn btn-primary btn-sm" onclick="sharePortOnSteam()">🚀 Опубликовать в Steam</button>
+                  <button class="btn btn-secondary btn-sm" onclick="copyMySteamId()">📋 Мой SteamID</button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--text-dim);">Друг в Steam:</span>
+                  <select id="steam-friends-select" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #161b26; border: 1px solid var(--border); border-radius: 4px; color: #fff;"></select>
+                  <button class="btn btn-secondary btn-sm" onclick="inviteSelectedSteamFriend()">📨 Позвать в игру</button>
+                </div>
+              </div>
+
+              <!-- STEAM CLIENT CONTROLS -->
+              <div id="steam-client-panel" style="display: none; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 12px; color: var(--text-muted);">SteamID хоста:</span>
+                  <input type="text" id="steam-target-id-input" placeholder="7656119..." style="flex: 1; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                  <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="font-size: 11px; color: var(--text-dim);">
+                    Адрес для игры: <span style="font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--green);" id="steam-client-addr">127.0.0.1:25565</span>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="copySteamGameAddr()">📋 Скопировать</button>
+                </div>
+              </div>
+            </div>
+
             <div class="card-title-badge" id="peers-count-lbl" style="margin-top: 6px;">УЧАСТНИКИ (0/16):</div>
             <div id="peers-list" style="flex: 1; overflow-y: auto; margin-top: 4px;"></div>
           </div>
@@ -1025,6 +1072,7 @@
       <label class="card-title-badge">СИГНАЛИНГ СЕРВЕР СЕТИ (P2P ХАБ)</label>
       <select class="input-field" id="settings-server-mode" onchange="onServerModeChange()">
         <option value="cloud">🌐 Глобальный облачный сервер (По умолчанию: lanforge.onrender.com)</option>
+        <option value="steam">🎮 Steam P2P (Valve SDR / Spacewar 480 - минимальный пинг)</option>
         <option value="local">💻 Встроенный локальный сервер (127.0.0.1:8787)</option>
         <option value="custom">🛠️ Пользовательский сервер (Свой VPS / IP)</option>
       </select>
@@ -1034,7 +1082,7 @@
         <input type="text" class="input-field" id="settings-custom-url" placeholder="ws://my-vps.com:8787">
       </div>
 
-      <div style="background: #18181c; border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: var(--text-dim); line-height: 1.4;">
+      <div id="settings-mode-hint" style="background: #18181c; border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: var(--text-dim); line-height: 1.4;">
         💡 <b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Никаких настроек портов и IP не требуется!
       </div>
 
@@ -1054,7 +1102,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.7.2</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.8.0</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1814,27 +1862,54 @@
       const isHost = (myId === currentRoom.hostId);
 
       // Manage Game Tunnel UI & Auto-start
+      const isSteamMode = (currentServerMode === "steam");
       const tunnelCard = document.getElementById("tunnel-card");
+      const steamCard = document.getElementById("steam-p2p-card");
       const hostPanel = document.getElementById("tunnel-host-panel");
       const clientPanel = document.getElementById("tunnel-client-panel");
       const gameNameEl = document.getElementById("tunnel-game-name");
 
-      if (tunnelCard && hostPanel && clientPanel) {
-        tunnelCard.style.display = "block";
-        if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "MINECRAFT";
-
-        if (isHost) {
-          hostPanel.style.display = "flex";
-          clientPanel.style.display = "none";
-        } else {
-          hostPanel.style.display = "none";
-          clientPanel.style.display = "flex";
+      if (isSteamMode) {
+        if (tunnelCard) tunnelCard.style.display = "none";
+        if (steamCard) {
+          steamCard.style.display = "block";
+          const steamHostPanel = document.getElementById("steam-host-panel");
+          const steamClientPanel = document.getElementById("steam-client-panel");
+          if (isHost) {
+            if (steamHostPanel) steamHostPanel.style.display = "flex";
+            if (steamClientPanel) steamClientPanel.style.display = "none";
+          } else {
+            if (steamHostPanel) steamHostPanel.style.display = "none";
+            if (steamClientPanel) steamClientPanel.style.display = "flex";
+          }
         }
+        refreshSteamStatus();
+        if (!steamPollTimer) {
+          steamPollTimer = setInterval(refreshSteamStatus, 3000);
+        }
+      } else {
+        if (steamCard) steamCard.style.display = "none";
+        if (steamPollTimer) {
+          clearInterval(steamPollTimer);
+          steamPollTimer = null;
+        }
+        if (tunnelCard && hostPanel && clientPanel) {
+          tunnelCard.style.display = "block";
+          if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "MINECRAFT";
 
-        // Auto-start tunnel bridge if not already running for this room session
-        if (!activeTunnelRoomCode || activeTunnelRoomCode !== currentRoom.code) {
-          activeTunnelRoomCode = currentRoom.code;
-          startTunnelForRoom();
+          if (isHost) {
+            hostPanel.style.display = "flex";
+            clientPanel.style.display = "none";
+          } else {
+            hostPanel.style.display = "none";
+            clientPanel.style.display = "flex";
+          }
+
+          // Auto-start tunnel bridge if not already running for this room session
+          if (!activeTunnelRoomCode || activeTunnelRoomCode !== currentRoom.code) {
+            activeTunnelRoomCode = currentRoom.code;
+            startTunnelForRoom();
+          }
         }
       }
 
@@ -1937,10 +2012,21 @@
     function onServerModeChange() {
       const mode = document.getElementById("settings-server-mode").value;
       const customBox = document.getElementById("settings-custom-url-container");
+      const hint = document.getElementById("settings-mode-hint");
       if (mode === "custom") {
         customBox.style.display = "block";
       } else {
         customBox.style.display = "none";
+      }
+
+      if (mode === "steam") {
+        if (hint) hint.innerHTML = `💡 <b>Steam P2P (SDR):</b> Трафик идет через приватную сеть Valve. Минимальный пинг, обход любого NAT и приглашение друзей через Steam! Требуется запущенный клиент Steam.`;
+      } else if (mode === "cloud") {
+        if (hint) hint.innerHTML = `💡 <b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Работает автономно, Steam не требуется!`;
+      } else if (mode === "local") {
+        if (hint) hint.innerHTML = `💡 <b>Локальный хаб:</b> Для игры внутри одной домашней Wi-Fi сети без интернета.`;
+      } else if (mode === "custom") {
+        if (hint) hint.innerHTML = `💡 <b>Пользовательский сервер:</b> Укажите WebSocket URL вашего собственного VPS или выделенного сервера.`;
       }
     }
 
@@ -1949,7 +2035,7 @@
       const mode = document.getElementById("settings-server-mode").value;
       let newUrl = "wss://lanforge.onrender.com";
 
-      if (mode === "cloud") {
+      if (mode === "cloud" || mode === "steam") {
         newUrl = "wss://lanforge.onrender.com";
       } else if (mode === "local") {
         newUrl = "ws://127.0.0.1:8787";
@@ -2113,6 +2199,132 @@
       const addr = `127.0.0.1:${currentListenPort}`;
       copyText(addr);
       showToast(`Адрес ${addr} скопирован! Вставьте в сетевой игре Minecraft`);
+    }
+
+    let steamPollTimer = null;
+    let currentSteamState = null;
+
+    function refreshSteamStatus() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_get_status) {
+        window.pywebview.api.steam_get_status().then(res => {
+          handleSteamStatus(res);
+        }).catch(err => {
+          console.warn("Failed to get steam status:", err);
+        });
+      }
+    }
+
+    function handleSteamStatus(res) {
+      if (!res) return;
+      const warningBox = document.getElementById("steam-warning-box");
+      const selfNameLbl = document.getElementById("steam-self-name");
+      const friendsSelect = document.getElementById("steam-friends-select");
+
+      if (!res.steamRunning) {
+        if (warningBox) warningBox.style.display = "block";
+        if (selfNameLbl) selfNameLbl.textContent = "Steam не запущен";
+        return;
+      }
+
+      if (warningBox) warningBox.style.display = "none";
+
+      if (!res.tunnelActive) {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_start) {
+          window.pywebview.api.steam_start();
+        }
+        return;
+      }
+
+      if (res.state) {
+        currentSteamState = res.state;
+        if (res.state.self_info && selfNameLbl) {
+          selfNameLbl.textContent = `${res.state.self_info.name} (${res.state.self_info.steam_id})`;
+        }
+
+        if (friendsSelect && res.state.friends) {
+          const prevVal = friendsSelect.value;
+          friendsSelect.innerHTML = '<option value="">-- Выберите друга в Steam --</option>';
+          res.state.friends.forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f.steam_id;
+            opt.textContent = `${f.name} ${f.in_tunnel ? '🎮 [В Spacewar]' : (f.online ? '🟢 [В сети]' : '⚪')}`;
+            friendsSelect.appendChild(opt);
+          });
+          if (prevVal) friendsSelect.value = prevVal;
+        }
+
+        if (res.state.connections && res.state.connections.length > 0) {
+          const conn = res.state.connections[0];
+          const rttLbl = document.getElementById("steam-rtt-lbl");
+          if (rttLbl && conn.ping_ms >= 0) {
+            rttLbl.textContent = `SDR Ping: ${conn.ping_ms} ms`;
+          }
+        }
+      }
+    }
+
+    function sharePortOnSteam() {
+      const portInput = document.getElementById("steam-host-port-input");
+      const port = parseInt(portInput.value) || 25565;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+        window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" }).then(res => {
+          if (res && res.ok) {
+            showToast(`Порт ${port} успешно опубликован в Valve SDR!`);
+          } else {
+            showToast(`Ошибка: ${res ? res.error : 'Steam недоступен'}`);
+          }
+        });
+      }
+    }
+
+    function copyMySteamId() {
+      if (currentSteamState && currentSteamState.self_info) {
+        copyText(currentSteamState.self_info.steam_id);
+        showToast(`SteamID скопирован: ${currentSteamState.self_info.steam_id}`);
+      } else {
+        showToast("SteamID еще не получен");
+      }
+    }
+
+    function inviteSelectedSteamFriend() {
+      const sel = document.getElementById("steam-friends-select");
+      const friendId = sel.value;
+      if (!friendId) {
+        showToast("Выберите друга из списка!");
+        return;
+      }
+      const portInput = document.getElementById("steam-host-port-input");
+      const port = parseInt(portInput.value) || 25565;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+        window.pywebview.api.steam_api("/api/invite", { peer: friendId, ports: [{ port: port, udp: false }] }).then(res => {
+          showToast("Инвайт отправлен другу через Steam!");
+        });
+      }
+    }
+
+    function connectToSteamHost() {
+      const targetInput = document.getElementById("steam-target-id-input");
+      const peerId = targetInput.value.trim();
+      if (!peerId) {
+        showToast("Введите SteamID хоста!");
+        return;
+      }
+      const port = 25565;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+        window.pywebview.api.steam_api("/api/connect", { peer: peerId, remote_port: port, local_port: port, udp: false }).then(res => {
+          if (res && res.ok) {
+            showToast(`Подключено к Steam SDR! Адрес для входа: 127.0.0.1:${port}`);
+          } else {
+            showToast(`Ошибка подключения: ${res ? res.error : 'неизвестно'}`);
+          }
+        });
+      }
+    }
+
+    function copySteamGameAddr() {
+      const addr = document.getElementById("steam-client-addr").textContent;
+      copyText(addr);
+      showToast(`Адрес ${addr} скопирован для Minecraft!`);
     }
 
     function startTunnelTelemetry() {

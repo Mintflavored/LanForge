@@ -8,7 +8,7 @@ LANForge Desktop Launcher (v1.7.2)
 - Zero-Driver P2P Game Data Tunnel with auto-reconnect & session recovery
 """
 
-__version__ = "1.7.2"
+__version__ = "1.8.0"
 
 import os
 import sys
@@ -20,6 +20,7 @@ import platform
 import subprocess
 import atexit
 import threading
+import urllib.request
 from logging.handlers import RotatingFileHandler
 
 # AppData configuration & logs directory
@@ -168,6 +169,75 @@ def stop_backend_server():
 
 atexit.register(stop_backend_server)
 
+steam_tunnel_proc = None
+
+def is_steam_running():
+    try:
+        out = subprocess.check_output('tasklist /FI "IMAGENAME eq steam.exe"', shell=True).decode("cp866", errors="ignore")
+        return "steam.exe" in out.lower()
+    except Exception:
+        return False
+
+def find_steam_tunnel_bin():
+    candidates = []
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        candidates.append(os.path.join(sys._MEIPASS, "bin", "steam-tunnel", "steam-tunnel.exe"))
+        candidates.append(os.path.join(sys._MEIPASS, "steam-tunnel.exe"))
+    candidates.extend([
+        os.path.join(exe_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
+        os.path.join(base_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
+        os.path.join(exe_dir, "steam-tunnel.exe"),
+        os.path.join(base_dir, "steam-tunnel.exe")
+    ])
+    for cand in candidates:
+        if cand and os.path.exists(cand):
+            return cand
+    return None
+
+def start_steam_tunnel():
+    global steam_tunnel_proc
+    if is_port_open("127.0.0.1", 7788):
+        logger.info("Steam tunnel already active on 127.0.0.1:7788")
+        return True
+
+    bin_path = find_steam_tunnel_bin()
+    if not bin_path:
+        logger.warning("steam-tunnel.exe binary not found in candidates.")
+        return False
+
+    try:
+        logger.info(f"Spawning Steam P2P bridge binary: {bin_path}")
+        creation_flags = 0x08000000 if sys.platform == "win32" else 0
+        steam_tunnel_proc = subprocess.Popen(
+            [bin_path],
+            cwd=os.path.dirname(bin_path),
+            creationflags=creation_flags
+        )
+        for _ in range(30):
+            time.sleep(0.1)
+            if is_port_open("127.0.0.1", 7788):
+                logger.info("Steam P2P bridge successfully listening on 127.0.0.1:7788")
+                return True
+    except Exception as e:
+        logger.error(f"[Steam Tunnel Spawn Error] {e}")
+    return False
+
+def stop_steam_tunnel():
+    global steam_tunnel_proc
+    if steam_tunnel_proc:
+        try:
+            logger.info("Terminating Steam tunnel...")
+            steam_tunnel_proc.terminate()
+            steam_tunnel_proc.wait(timeout=1.0)
+        except Exception:
+            try:
+                steam_tunnel_proc.kill()
+            except Exception:
+                pass
+        steam_tunnel_proc = None
+
+atexit.register(stop_steam_tunnel)
+
 def load_user_config():
     try:
         if os.path.exists(CONFIG_FILE):
@@ -255,6 +325,47 @@ class JsApi:
         if tray:
             tray.notify(title, message)
 
+    def steam_get_status(self):
+        steam_running = is_steam_running()
+        tunnel_active = is_port_open("127.0.0.1", 7788)
+        state_data = None
+        if tunnel_active:
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:7788/api/state",
+                    headers={"X-ST": "1", "Host": "127.0.0.1:7788"}
+                )
+                with urllib.request.urlopen(req, timeout=1.5) as resp:
+                    state_data = json.loads(resp.read().decode("utf-8"))
+            except Exception as e:
+                logger.debug(f"[Steam State Error] {e}")
+        return {
+            "steamRunning": steam_running,
+            "tunnelActive": tunnel_active,
+            "state": state_data
+        }
+
+    def steam_start(self):
+        if not is_steam_running():
+            return {"ok": False, "error": "Steam не запущен на компьютере"}
+        ok = start_steam_tunnel()
+        return {"ok": ok}
+
+    def steam_stop(self):
+        stop_steam_tunnel()
+        return {"ok": True}
+
+    def steam_api(self, endpoint, payload=None):
+        try:
+            url = f"http://127.0.0.1:7788{endpoint}"
+            headers = {"X-ST": "1", "Host": "127.0.0.1:7788", "Content-Type": "application/json"}
+            data = json.dumps(payload or {}).encode("utf-8") if payload is not None else None
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
 def on_show_window():
     global main_window
     if main_window:
@@ -268,6 +379,7 @@ def on_quit_app():
     global main_window
     logger.info("Application quitting requested.")
     stop_backend_server()
+    stop_steam_tunnel()
     if main_window:
         try:
             main_window.destroy()
@@ -311,6 +423,7 @@ def main():
         if tray:
             tray.stop()
         stop_backend_server()
+        stop_steam_tunnel()
 
     main_window.events.closed += on_closed
 
