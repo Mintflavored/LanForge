@@ -809,9 +809,11 @@
 
               <!-- STEAM CLIENT CONTROLS -->
               <div id="steam-client-panel" style="display: none; flex-direction: column; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span style="font-size: 12px; color: var(--text-muted);">SteamID хоста:</span>
-                  <input type="text" id="steam-target-id-input" placeholder="7656119..." style="flex: 1; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                  <input type="text" id="steam-target-id-input" placeholder="7656119..." style="flex: 1; min-width: 130px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                  <span style="font-size: 12px; color: var(--text-muted);">Порт:</span>
+                  <input type="number" id="steam-client-port-input" value="25565" style="width: 75px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
                   <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться</button>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1102,7 +1104,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.8.0</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.8.1</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -2309,10 +2311,13 @@
         showToast("Введите SteamID хоста!");
         return;
       }
-      const port = 25565;
+      const portInput = document.getElementById("steam-client-port-input");
+      const port = parseInt(portInput ? portInput.value : "") || (typeof activeGamePort !== 'undefined' && activeGamePort ? activeGamePort : 25565);
       if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
         window.pywebview.api.steam_api("/api/connect", { peer: peerId, remote_port: port, local_port: port, udp: false }).then(res => {
           if (res && res.ok) {
+            const addrSpan = document.getElementById("steam-client-addr");
+            if (addrSpan) addrSpan.textContent = `127.0.0.1:${port}`;
             showToast(`Подключено к Steam SDR! Адрес для входа: 127.0.0.1:${port}`);
           } else {
             showToast(`Ошибка подключения: ${res ? res.error : 'неизвестно'}`);

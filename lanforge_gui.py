@@ -1,14 +1,15 @@
 r"""
-LANForge Desktop Launcher (v1.7.2)
+LANForge Desktop Launcher (v1.8.1)
 - Discord Rich Presence (RPC) Integration
 - Windows System Tray & Native Toast Notifications
 - DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
 - Hybrid Cloud & Local Signaling support
 - Unified Rotating File Logger (%APPDATA%\LANForge\lanforge.log)
 - Zero-Driver P2P Game Data Tunnel with auto-reconnect & session recovery
+- Steamworks Valve SDR P2P Tunneling (Spacewar AppID 480)
 """
 
-__version__ = "1.8.0"
+__version__ = "1.8.1"
 
 import os
 import sys
@@ -182,16 +183,39 @@ def find_steam_tunnel_bin():
     candidates = []
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         candidates.append(os.path.join(sys._MEIPASS, "bin", "steam-tunnel", "steam-tunnel.exe"))
+        candidates.append(os.path.join(sys._MEIPASS, "steam-tunnel", "steam-tunnel.exe"))
         candidates.append(os.path.join(sys._MEIPASS, "steam-tunnel.exe"))
     candidates.extend([
         os.path.join(exe_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
-        os.path.join(base_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
+        os.path.join(exe_dir, "steam-tunnel", "steam-tunnel.exe"),
         os.path.join(exe_dir, "steam-tunnel.exe"),
+        os.path.join(base_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
+        os.path.join(base_dir, "steam-tunnel", "steam-tunnel.exe"),
         os.path.join(base_dir, "steam-tunnel.exe")
     ])
     for cand in candidates:
         if cand and os.path.exists(cand):
             return cand
+
+    # Recursive fallback search in frozen directory
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        try:
+            for root, _, files in os.walk(sys._MEIPASS):
+                if "steam-tunnel.exe" in files:
+                    return os.path.join(root, "steam-tunnel.exe")
+        except Exception:
+            pass
+
+    # Recursive fallback search in exe_dir and base_dir
+    try:
+        for search_dir in (exe_dir, base_dir):
+            if os.path.exists(search_dir):
+                for root, _, files in os.walk(search_dir):
+                    if "steam-tunnel.exe" in files:
+                        return os.path.join(root, "steam-tunnel.exe")
+    except Exception:
+        pass
+
     return None
 
 def start_steam_tunnel():
@@ -206,13 +230,41 @@ def start_steam_tunnel():
         return False
 
     try:
-        logger.info(f"Spawning Steam P2P bridge binary: {bin_path}")
+        tunnel_dir = os.path.dirname(bin_path)
+        # Ensure steam_appid.txt exists with AppID 480 (Spacewar)
+        appid_file = os.path.join(tunnel_dir, "steam_appid.txt")
+        if not os.path.exists(appid_file):
+            try:
+                with open(appid_file, "w", encoding="utf-8") as f:
+                    f.write("480\n")
+            except Exception as e:
+                logger.warning(f"Could not create steam_appid.txt: {e}")
+
+        logger.info(f"Spawning Steam P2P bridge binary: {bin_path} (cwd: {tunnel_dir})")
         creation_flags = 0x08000000 if sys.platform == "win32" else 0
         steam_tunnel_proc = subprocess.Popen(
             [bin_path],
-            cwd=os.path.dirname(bin_path),
-            creationflags=creation_flags
+            cwd=tunnel_dir,
+            creationflags=creation_flags,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
+
+        def pipe_steam_stream(stream, is_err=False):
+            try:
+                for line in iter(stream.readline, b''):
+                    msg = line.decode('utf-8', errors='ignore').strip()
+                    if msg:
+                        if is_err:
+                            logger.error(f"[SteamTunnel] {msg}")
+                        else:
+                            logger.info(f"[SteamTunnel] {msg}")
+            except Exception:
+                pass
+
+        threading.Thread(target=pipe_steam_stream, args=(steam_tunnel_proc.stdout, False), daemon=True).start()
+        threading.Thread(target=pipe_steam_stream, args=(steam_tunnel_proc.stderr, True), daemon=True).start()
+
         for _ in range(30):
             time.sleep(0.1)
             if is_port_open("127.0.0.1", 7788):

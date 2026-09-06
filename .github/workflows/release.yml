@@ -40,9 +40,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verify Steam Tunnel Binaries
+        shell: pwsh
+        run: |
+          if (!(Test-Path "bin/steam-tunnel/steam-tunnel.exe")) { throw "Missing bin/steam-tunnel/steam-tunnel.exe" }
+          if (!(Test-Path "bin/steam-tunnel/steam_api64.dll")) { throw "Missing bin/steam-tunnel/steam_api64.dll" }
+          if (!(Test-Path "bin/steam-tunnel/steam_appid.txt")) { Set-Content -Path "bin/steam-tunnel/steam_appid.txt" -Value "480" }
+          Write-Host "Steam Tunnel binaries verified."
+
       - name: Package Monolithic LANForge Executable
         run: |
-          python -m PyInstaller --noconsole --onefile --clean --name "LANForge" --icon app.ico --add-data "ui;ui" --add-data "app_icon.png;." --add-data "discord_banner.png;." --add-binary "bin/lanforge-server.exe;." --collect-all webview --collect-all pystray --collect-all PIL --collect-all clr_loader --collect-all pythonnet lanforge_gui.py --distpath ./dist
+          python -m PyInstaller --noconsole --onefile --clean --name "LANForge" --icon app.ico --add-data "ui;ui" --add-data "app_icon.png;." --add-data "discord_banner.png;." --add-binary "bin/lanforge-server.exe;." --add-binary "bin/steam-tunnel/steam-tunnel.exe;bin/steam-tunnel" --add-binary "bin/steam-tunnel/steam_api64.dll;bin/steam-tunnel" --add-data "bin/steam-tunnel/steam_appid.txt;bin/steam-tunnel" --collect-all webview --collect-all pystray --collect-all PIL --collect-all clr_loader --collect-all pythonnet lanforge_gui.py --distpath ./dist
 
       - name: Create Release Archive
         shell: pwsh

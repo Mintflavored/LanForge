@@ -8,6 +8,10 @@ target/
 *.pyc
 __pycache__/
 
+# Whitelist steam tunnel binaries bundled in repository
+!bin/steam-tunnel/*.exe
+!bin/steam-tunnel/*.dll
+
 # Environment & Logs
 .env
 *.log
