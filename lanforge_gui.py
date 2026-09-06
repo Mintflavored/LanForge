@@ -418,6 +418,15 @@ class JsApi:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def steam_install_spacewar(self):
+        try:
+            os.startfile("steam://install/480")
+            logger.info("Triggered native Steam Spacewar (AppID 480) installation")
+            return {"ok": True}
+        except Exception as e:
+            logger.error(f"Failed to trigger Steam install: {e}")
+            return {"ok": False, "error": str(e)}
+
 def on_show_window():
     global main_window
     if main_window:

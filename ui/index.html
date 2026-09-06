@@ -783,7 +783,10 @@
                   <span class="p2p-badge" style="background: rgba(30, 144, 255, 0.2); color: #38bdf8; border: 1px solid #0284c7;" id="steam-status-badge">🎮 STEAM P2P (VALVE SDR)</span>
                   <span style="font-size: 11px; font-weight: 700; color: #94a3b8;" id="steam-self-name">AppID 480</span>
                 </div>
-                <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">SDR Ping: ~15 ms</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10px;" onclick="installSpacewarNative()" title="Установить Spacewar прямо в клиенте Steam без браузера">📥 Скачать Spacewar в Steam</button>
+                  <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">SDR Ping: ~15 ms</div>
+                </div>
               </div>
 
               <!-- STEAM WARNING (IF STEAM NOT RUNNING) -->
@@ -805,16 +808,18 @@
                   <select id="steam-friends-select" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #161b26; border: 1px solid var(--border); border-radius: 4px; color: #fff;"></select>
                   <button class="btn btn-secondary btn-sm" onclick="inviteSelectedSteamFriend()">📨 Позвать в игру</button>
                 </div>
+                <div style="font-size: 11px; color: #38bdf8;">✨ <b>Zero-Click Sync:</b> друзья в комнате подключаются к вашему серверу через Valve SDR автоматически!</div>
               </div>
 
               <!-- STEAM CLIENT CONTROLS -->
               <div id="steam-client-panel" style="display: none; flex-direction: column; gap: 8px;">
+                <div id="steam-auto-status" style="font-size: 11px; color: #4ade80;">⚡ Авто-подключение Steam P2P включено. Ожидание хоста...</div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span style="font-size: 12px; color: var(--text-muted);">SteamID хоста:</span>
                   <input type="text" id="steam-target-id-input" placeholder="7656119..." style="flex: 1; min-width: 130px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
                   <span style="font-size: 12px; color: var(--text-muted);">Порт:</span>
                   <input type="number" id="steam-client-port-input" value="25565" style="width: 75px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
-                  <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться</button>
+                  <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться вручную</button>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div style="font-size: 11px; color: var(--text-dim);">
@@ -1477,6 +1482,9 @@
           syncNativePresence();
           showToast(msg.type === "room_created" ? "Комната создана!" : "Подключено к комнате!");
           notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы подключились к комнате");
+          if (currentRoom && currentRoom.hostId === myId) {
+            setTimeout(broadcastSteamHostInfo, 600);
+          }
           break;
 
         case "peer_joined":
@@ -1489,6 +1497,9 @@
             syncNativePresence();
             showToast(`Игрок ${msg.peer.nick} подключился`);
             notifyNative("LANForge", `Игрок ${msg.peer.nick} подключился`);
+            if (currentRoom && currentRoom.hostId === myId) {
+              setTimeout(broadcastSteamHostInfo, 600);
+            }
           }
           break;
 
@@ -1548,6 +1559,10 @@
 
         case "chat_broadcast":
           if (msg.message) {
+            if (msg.message.text && msg.message.text.startsWith("::STEAM_ANNOUNCE::")) {
+              handleSteamAnnounce(msg.message.text.slice(18), msg.message.fromPeerId);
+              break;
+            }
             appendChatMessage(msg.message);
             if (msg.message.fromPeerId !== myId) {
               playSound("chat");
@@ -2241,6 +2256,10 @@
         currentSteamState = res.state;
         if (res.state.self_info && selfNameLbl) {
           selfNameLbl.textContent = `${res.state.self_info.name} (${res.state.self_info.steam_id})`;
+          if (currentRoom && currentRoom.hostId === myId && !hasAnnouncedSteamHost) {
+            hasAnnouncedSteamHost = true;
+            broadcastSteamHostInfo();
+          }
         }
 
         if (friendsSelect && res.state.friends) {
@@ -2265,12 +2284,77 @@
       }
     }
 
+    let hasAnnouncedSteamHost = false;
+
+    function installSpacewarNative() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_install_spacewar) {
+        window.pywebview.api.steam_install_spacewar().then(res => {
+          if (res && res.ok) {
+            showToast("Запущена загрузка Spacewar прямо в клиенте Steam!");
+          } else {
+            showToast("Не удалось запустить Steam: " + (res ? res.error : ""));
+          }
+        });
+      }
+    }
+
+    function broadcastSteamHostInfo() {
+      if (!currentRoom || currentRoom.hostId !== myId) return;
+      if (currentSteamState && currentSteamState.self_info && currentSteamState.self_info.steam_id) {
+        const portInput = document.getElementById("steam-host-port-input");
+        const port = parseInt(portInput ? portInput.value : "") || activeGamePort || 25565;
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+          window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" });
+        }
+        sendWS({
+          type: "chat_message",
+          text: "::STEAM_ANNOUNCE::" + JSON.stringify({ steamId: currentSteamState.self_info.steam_id, port: port })
+        });
+      }
+    }
+
+    function handleSteamAnnounce(payloadStr, fromPeerId) {
+      try {
+        const data = JSON.parse(payloadStr);
+        if (!data || !data.steamId) return;
+
+        const targetInput = document.getElementById("steam-target-id-input");
+        if (targetInput) targetInput.value = data.steamId;
+        const portInput = document.getElementById("steam-client-port-input");
+        if (portInput && data.port) portInput.value = data.port;
+        const addrSpan = document.getElementById("steam-client-addr");
+        if (addrSpan && data.port) addrSpan.textContent = `127.0.0.1:${data.port}`;
+
+        // Auto-connect client to host via Steam P2P if in this room
+        if (currentRoom && currentRoom.hostId === fromPeerId && fromPeerId !== myId) {
+          const autoStatus = document.getElementById("steam-auto-status");
+          if (autoStatus) autoStatus.textContent = "⚡ Выполняется авто-подключение по Steam P2P...";
+          const port = data.port || 25565;
+          if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+            window.pywebview.api.steam_api("/api/connect", { peer: data.steamId, remote_port: port, local_port: port, udp: false }).then(res => {
+              if (res && res.ok) {
+                if (autoStatus) autoStatus.textContent = `🟢 Подключено по Steam P2P! В игре: 127.0.0.1:${port}`;
+                showToast(`⚡ Steam P2P подключен автоматически! Играйте на 127.0.0.1:${port}`);
+                const rttLbl = document.getElementById("steam-rtt-lbl");
+                if (rttLbl) rttLbl.textContent = "SDR: Соединено (авто)";
+              } else {
+                if (autoStatus) autoStatus.textContent = `⚠️ Ошибка авто-подключения: ${res ? res.error : 'неизвестно'}`;
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[SteamAuto] Failed to parse announce:", e);
+      }
+    }
+
     function sharePortOnSteam() {
       const portInput = document.getElementById("steam-host-port-input");
       const port = parseInt(portInput.value) || 25565;
       if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
         window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" }).then(res => {
           if (res && res.ok) {
+            broadcastSteamHostInfo();
             showToast(`Порт ${port} успешно опубликован в Valve SDR!`);
           } else {
             showToast(`Ошибка: ${res ? res.error : 'Steam недоступен'}`);
@@ -2355,6 +2439,7 @@
     }
 
     function leaveRoom() {
+      hasAnnouncedSteamHost = false;
       sendWS({ type: "leave_room" });
       stopTunnel();
       currentRoom = null;
