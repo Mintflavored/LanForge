@@ -784,7 +784,7 @@
                   <span style="font-size: 11px; font-weight: 700; color: #94a3b8;" id="steam-self-name">AppID 480</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10px;" onclick="installSpacewarNative()" title="Установить Spacewar прямо в клиенте Steam без браузера">📥 Скачать Spacewar в Steam</button>
+                  <span style="font-size: 11px; color: #4ade80; font-weight: 600; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.25); padding: 2px 8px; border-radius: 4px;">✓ Скачивать Spacewar НЕ нужно</span>
                   <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">SDR Ping: ~15 ms</div>
                 </div>
               </div>
@@ -806,20 +806,24 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span style="font-size: 11px; color: var(--text-dim);">Друг в Steam:</span>
                   <select id="steam-friends-select" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #161b26; border: 1px solid var(--border); border-radius: 4px; color: #fff;"></select>
-                  <button class="btn btn-secondary btn-sm" onclick="inviteSelectedSteamFriend()">📨 Позвать в игру</button>
+                  <button class="btn btn-secondary btn-sm" onclick="inviteSelectedSteamFriend()" title="Отправить приглашение в чат Steam">📨 Инвайт в чат Steam</button>
                 </div>
-                <div style="font-size: 11px; color: #38bdf8;">✨ <b>Zero-Click Sync:</b> друзья в комнате подключаются к вашему серверу через Valve SDR автоматически!</div>
+                <div style="font-size: 11px; color: #38bdf8;">✨ <b>Zero-Click Sync:</b> скачивать Spacewar не нужно! Другу достаточно войти в комнату по её коду в LANForge, и P2P-туннель заработает автоматически.</div>
               </div>
 
               <!-- STEAM CLIENT CONTROLS -->
               <div id="steam-client-panel" style="display: none; flex-direction: column; gap: 8px;">
-                <div id="steam-auto-status" style="font-size: 11px; color: #4ade80;">⚡ Авто-подключение Steam P2P включено. Ожидание хоста...</div>
+                <div id="steam-auto-status" style="font-size: 11px; color: #4ade80;">⚡ Авто-подключение Steam P2P активно. Ожидание сигнала хоста...</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--text-dim);">Хост из друзей:</span>
+                  <select id="steam-client-friends-select" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #161b26; border: 1px solid var(--border); border-radius: 4px; color: #fff;" onchange="onSelectClientSteamFriend()"></select>
+                </div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span style="font-size: 12px; color: var(--text-muted);">SteamID хоста:</span>
                   <input type="text" id="steam-target-id-input" placeholder="7656119..." style="flex: 1; min-width: 130px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
                   <span style="font-size: 12px; color: var(--text-muted);">Порт:</span>
                   <input type="number" id="steam-client-port-input" value="25565" style="width: 75px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
-                  <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться вручную</button>
+                  <button class="btn btn-primary btn-sm" onclick="connectToSteamHost()">⚡ Подключиться</button>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div style="font-size: 11px; color: var(--text-dim);">
@@ -2262,16 +2266,29 @@
           }
         }
 
+        const clientFriendsSelect = document.getElementById("steam-client-friends-select");
         if (friendsSelect && res.state.friends) {
           const prevVal = friendsSelect.value;
           friendsSelect.innerHTML = '<option value="">-- Выберите друга в Steam --</option>';
           res.state.friends.forEach(f => {
             const opt = document.createElement("option");
             opt.value = f.steam_id;
-            opt.textContent = `${f.name} ${f.in_tunnel ? '🎮 [В Spacewar]' : (f.online ? '🟢 [В сети]' : '⚪')}`;
+            opt.textContent = `${f.name} ${f.in_tunnel ? '🎮 [В сети LANForge]' : (f.online ? '🟢 [В сети]' : '⚪')}`;
             friendsSelect.appendChild(opt);
           });
           if (prevVal) friendsSelect.value = prevVal;
+        }
+
+        if (clientFriendsSelect && res.state.friends) {
+          const prevClientVal = clientFriendsSelect.value;
+          clientFriendsSelect.innerHTML = '<option value="">-- Выберите хоста из друзей --</option>';
+          res.state.friends.forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f.steam_id;
+            opt.textContent = `${f.name} ${f.in_tunnel ? '🎮 [В сети LANForge]' : (f.online ? '🟢 [В сети]' : '⚪')}`;
+            clientFriendsSelect.appendChild(opt);
+          });
+          if (prevClientVal) clientFriendsSelect.value = prevClientVal;
         }
 
         if (res.state.connections && res.state.connections.length > 0) {
@@ -2281,6 +2298,14 @@
             rttLbl.textContent = `SDR Ping: ${conn.ping_ms} ms`;
           }
         }
+      }
+    }
+
+    function onSelectClientSteamFriend() {
+      const sel = document.getElementById("steam-client-friends-select");
+      if (sel && sel.value) {
+        const targetInput = document.getElementById("steam-target-id-input");
+        if (targetInput) targetInput.value = sel.value;
       }
     }
 
