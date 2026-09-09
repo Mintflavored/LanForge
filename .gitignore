@@ -15,6 +15,7 @@ __pycache__/
 # Environment & Logs
 .env
 *.log
+steam_appid.txt
 .DS_Store
 Thumbs.db
 

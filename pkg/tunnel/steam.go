@@ -111,7 +111,9 @@ type SteamManager struct {
 	procGetFriendName    *syscall.LazyProc
 	procGetFriendState   *syscall.LazyProc
 	procInviteUser       *syscall.LazyProc
-	procSockets          *syscall.LazyProc
+	procSocketsRunCallbacks *syscall.LazyProc
+	procGetConnInfo         *syscall.LazyProc
+	procSockets             *syscall.LazyProc
 	procUtils            *syscall.LazyProc
 	procSetCallback      *syscall.LazyProc
 	procCreateListen     *syscall.LazyProc
@@ -185,8 +187,10 @@ func newSteamManager() *SteamManager {
 		procGetFriendByIndex: dll.NewProc("SteamAPI_ISteamFriends_GetFriendByIndex"),
 		procGetFriendName:    dll.NewProc("SteamAPI_ISteamFriends_GetFriendPersonaName"),
 		procGetFriendState:   dll.NewProc("SteamAPI_ISteamFriends_GetFriendPersonaState"),
-		procInviteUser:       dll.NewProc("SteamAPI_ISteamFriends_InviteUserToGame"),
-		procSockets:          dll.NewProc("SteamAPI_SteamNetworkingSockets_SteamAPI_v012"),
+		procInviteUser:          dll.NewProc("SteamAPI_ISteamFriends_InviteUserToGame"),
+		procSocketsRunCallbacks: dll.NewProc("SteamAPI_ISteamNetworkingSockets_RunCallbacks"),
+		procGetConnInfo:         dll.NewProc("SteamAPI_ISteamNetworkingSockets_GetConnectionInfo"),
+		procSockets:             dll.NewProc("SteamAPI_SteamNetworkingSockets_SteamAPI_v012"),
 		procUtils:            dll.NewProc("SteamAPI_SteamNetworkingUtils_SteamAPI_v004"),
 		procSetCallback:      dll.NewProc("SteamAPI_ISteamNetworkingUtils_SetGlobalCallback_SteamNetConnectionStatusChanged"),
 		procCreateListen:     dll.NewProc("SteamAPI_ISteamNetworkingSockets_CreateListenSocketP2P"),
@@ -302,8 +306,7 @@ func (m *SteamManager) Init() error {
 		if pInfo == 0 {
 			return 0
 		}
-		hConn := *(*uint32)(unsafe.Pointer(pInfo))
-		m.onConnectionStatusChanged(hConn)
+		m.onConnectionStatusChanged(pInfo)
 		return 0
 	})
 	m.procSetCallback.Call(m.utilsPtr, cb)
@@ -322,6 +325,7 @@ func (m *SteamManager) Init() error {
 			if !init {
 				return
 			}
+			m.procSocketsRunCallbacks.Call(m.socketsPtr)
 			m.procRunCallbacks.Call()
 		}
 	}()
@@ -329,11 +333,35 @@ func (m *SteamManager) Init() error {
 	return nil
 }
 
-func (m *SteamManager) onConnectionStatusChanged(hConn uint32) {
-	var status SteamRealTimeStatus
-	m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&status)), 0, 0)
-	if status.Ping >= 0 {
-		m.lastPing.Store(status.Ping)
+func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
+	if pInfo == 0 {
+		return
+	}
+
+	hConn := *(*uint32)(unsafe.Pointer(pInfo))
+	// In SteamNetConnectionStatusChangedCallback_t:
+	// m_hConn: offset 0 (4 bytes)
+	// padding: offset 4 (4 bytes)
+	// m_info: offset 8 (SteamNetConnectionInfo_t)
+	// In SteamNetConnectionInfo_t: m_eState is at offset 176 (4 bytes)
+	// Therefore m_info.m_eState in callback is at offset 8 + 176 = 184
+	cbState := *(*int32)(unsafe.Pointer(pInfo + 184))
+	state := cbState
+
+	// Verify via GetConnectionInfo to ensure state is accurate
+	var infoBuf [1024]byte
+	rInfo, _, _ := m.procGetConnInfo.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&infoBuf[0])))
+	if rInfo != 0 {
+		infoState := *(*int32)(unsafe.Pointer(&infoBuf[176]))
+		if infoState != 0 {
+			state = infoState
+		}
+	}
+
+	var rtStatus SteamRealTimeStatus
+	m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&rtStatus)), 0, 0)
+	if rtStatus.Ping >= 0 {
+		m.lastPing.Store(rtStatus.Ping)
 	}
 
 	m.stateMu.RLock()
@@ -341,17 +369,23 @@ func (m *SteamManager) onConnectionStatusChanged(hConn uint32) {
 	gamePort := m.hostGamePort
 	m.stateMu.RUnlock()
 
-	log.Printf("[Steam P2P] Connection #%d status event: state=%d, ping=%dms", hConn, status.State, status.Ping)
+	log.Printf("[Steam P2P] Connection #%d status event: state=%d (cbState=%d), ping=%dms", hConn, state, cbState, rtStatus.Ping)
 
-	switch status.State {
+	switch state {
 	case k_ESteamNetworkingConnectionState_Connecting:
 		if isHost {
 			log.Printf("[Steam P2P Host] Accepting incoming peer connection #%d...", hConn)
-			m.procAcceptConn.Call(m.socketsPtr, uintptr(hConn))
+			rAccept, _, _ := m.procAcceptConn.Call(m.socketsPtr, uintptr(hConn))
+			if rAccept != 1 {
+				log.Printf("[Steam P2P Host] AcceptConnection failed for #%d: result=%d", hConn, rAccept)
+				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+				return
+			}
+			log.Printf("[Steam P2P Host] Accepted peer connection #%d successfully!", hConn)
 
 			// Connect to local Minecraft server
 			localAddr := fmt.Sprintf("127.0.0.1:%d", gamePort)
-			tcpConn, err := net.DialTimeout("tcp", localAddr, 2*time.Second)
+			tcpConn, err := net.DialTimeout("tcp", localAddr, 3*time.Second)
 			if err != nil {
 				log.Printf("[Steam P2P Host] Failed to dial local game on %s: %v", localAddr, err)
 				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
@@ -366,6 +400,9 @@ func (m *SteamManager) onConnectionStatusChanged(hConn uint32) {
 			m.ensurePump()
 			go m.pipeTCPToSteam(sc)
 		}
+
+	case k_ESteamNetworkingConnectionState_Connected:
+		log.Printf("[Steam P2P] Connection #%d is now fully ESTABLISHED and active", hConn)
 
 	case k_ESteamNetworkingConnectionState_ClosedByPeer, k_ESteamNetworkingConnectionState_ProblemDetectedLocally:
 		m.connsMu.Lock()
@@ -475,7 +512,41 @@ func (m *SteamManager) StartClient(hostSteamID uint64, localPort int) (int, erro
 		}
 	}(hostSteamID, l)
 
+	// Start local Minecraft LAN multicast beacon so game auto-appears in Multiplayer list
+	go m.startMinecraftBeacon(actualPort)
+
 	return actualPort, nil
+}
+
+func (m *SteamManager) startMinecraftBeacon(port int) {
+	addr, err := net.ResolveUDPAddr("udp4", "224.0.2.60:4445")
+	if err != nil {
+		return
+	}
+	conn, err := net.DialUDP("udp4", nil, addr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	msg := []byte(fmt.Sprintf("[MOTD]LANForge World[/MOTD][AD]%d[/AD]", port))
+	ticker := time.NewTicker(1500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.stateMu.RLock()
+			active := m.clientActive
+			m.stateMu.RUnlock()
+			if !active {
+				return
+			}
+			_, _ = conn.Write(msg)
+		case <-m.stopPump:
+			return
+		}
+	}
 }
 
 // pipeTCPToSteam reads from local TCP and sends via Steam SDR P2P.
@@ -500,8 +571,9 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 				k_nSteamNetworkingSend_ReliableNoNagle,
 				0,
 			)
-			if r < 0 {
-				// Send failure
+			if r != 1 {
+				// Send failure: r != k_EResultOK
+				log.Printf("[Steam P2P] SendMessage failed on conn #%d: result=%d", sc.hConn, r)
 				return
 			}
 			m.BytesUp.Add(uint64(n))
@@ -524,6 +596,7 @@ func (m *SteamManager) ensurePump() {
 func (m *SteamManager) pumpLoop() {
 	for m.pumpRunning.Load() {
 		hasData := false
+		m.procSocketsRunCallbacks.Call(m.socketsPtr)
 
 		m.connsMu.Lock()
 		for hConn, sc := range m.activeConns {
