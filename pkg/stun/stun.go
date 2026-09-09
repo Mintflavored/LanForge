@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type Result struct {
 	PublicPort   int    `json:"publicPort"`
 	NatType      string `json:"natType"`
 	IsBehindVPN  bool   `json:"isBehindVpn"`
+	VpnName      string `json:"vpnName,omitempty"`
 	ActiveServer string `json:"activeServer"`
 }
 
@@ -75,12 +77,15 @@ func DetectNat() Result {
 		}
 	}
 
+	isVPN, vpnName := detectVPNInterface()
+
 	if len(responses) == 0 {
 		return Result{
 			PublicIP:     "127.0.0.1",
 			PublicPort:   0,
 			NatType:      "RestrictedCone",
-			IsBehindVPN:  detectVPNInterface(),
+			IsBehindVPN:  isVPN,
+			VpnName:      vpnName,
 			ActiveServer: "Local Fallback",
 		}
 	}
@@ -100,7 +105,8 @@ func DetectNat() Result {
 		PublicIP:     first.ip,
 		PublicPort:   first.port,
 		NatType:      natType,
-		IsBehindVPN:  detectVPNInterface(),
+		IsBehindVPN:  isVPN,
+		VpnName:      vpnName,
 		ActiveServer: first.server,
 	}
 }
@@ -153,26 +159,26 @@ func isValidPublicIP(ipStr string) bool {
 	return true
 }
 
-func detectVPNInterface() bool {
+func detectVPNInterface() (bool, string) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return false
+		return false, ""
 	}
 
-	vpnKeywords := []string{"tun", "tap", "wintun", "wireguard", "clash", "sing-box", "v2ray", "xray", "tailscale", "zerotier"}
+	vpnKeywords := []string{"tun", "tap", "wintun", "wireguard", "clash", "sing-box", "v2ray", "xray", "tailscale", "zerotier", "openvpn"}
 	for _, iface := range ifaces {
 		name := iface.Name
 		for _, kw := range vpnKeywords {
-			if len(name) >= len(kw) && containsIgnoreCase(name, kw) {
-				return true
+			if containsIgnoreCase(name, kw) {
+				return true, name
 			}
 		}
 	}
-	return false
+	return false, ""
 }
 
 func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0)
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 func queryStunDirect(serverAddr string, timeout time.Duration) (string, int, time.Duration, error) {

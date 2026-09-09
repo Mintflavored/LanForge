@@ -1,5 +1,5 @@
 r"""
-LANForge Desktop Launcher (v2.0.3)
+LANForge Desktop Launcher (v2.2.0)
 Single-process Desktop wrapper around LANForge Web UI & Local Server.
 Features:
 - Spawns local signaling/game server (Go binary)
@@ -9,7 +9,7 @@ Features:
 - Cross-platform support
 """
 
-__version__ = "2.0.3"
+__version__ = "2.2.0"
 
 import os
 import sys
@@ -335,9 +335,6 @@ class JsApi:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    def steam_install_spacewar(self):
-        # Spacewar installation is no longer needed with native Steamworks SDR!
-        return {"ok": True}
 
 def on_show_window():
     global main_window
@@ -351,8 +348,15 @@ def on_show_window():
 def on_quit_app():
     global main_window
     logger.info("Application quitting requested.")
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8787/api/steam/stop", data=b"{}", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=0.5):
+            pass
+    except Exception:
+        pass
+    if tray:
+        tray.stop()
     stop_backend_server()
-    stop_steam_tunnel()
     if main_window:
         try:
             main_window.destroy()
@@ -369,6 +373,7 @@ def main():
     tray = TrayManager(
         icon_path=icon_path,
         app_name="LANForge",
+        version=__version__,
         on_show=on_show_window,
         on_quit=on_quit_app
     )
@@ -393,10 +398,15 @@ def main():
 
     def on_closed():
         logger.info("Main window closed event triggered.")
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8787/api/steam/stop", data=b"{}", headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=0.5):
+                pass
+        except Exception:
+            pass
         if tray:
             tray.stop()
         stop_backend_server()
-        stop_steam_tunnel()
 
     main_window.events.closed += on_closed
 

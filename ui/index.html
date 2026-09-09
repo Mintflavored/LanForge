@@ -705,7 +705,7 @@
       <polyline points="20 6 9 17 4 12"></polyline>
     </symbol>
     <symbol id="icon-steam" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.005.105.005.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12zm-3.613 18.232c-.378 0-.741-.097-1.065-.27l1.792-.741c.883-.365 1.305-1.375.94-2.258-.363-.882-1.374-1.303-2.257-.94l-1.85.766c.218-.948.971-1.678 1.914-1.847l3.655 1.51c-.015.115-.028.231-.028.35 0 1.895 1.542 3.43 3.437 3.43H15.5l-3.666 2.623c-.156.025-.316.037-.478.037h.01zm7.573-7.054c-1.248 0-2.262-1.014-2.262-2.264 0-1.248 1.014-2.261 2.262-2.261 1.25 0 2.264 1.013 2.264 2.261 0 1.25-1.014 2.264-2.264 2.264z"/>
+      <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/>
     </symbol>
     <symbol id="icon-gamepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="6" width="20" height="12" rx="4"></rect>
@@ -811,10 +811,10 @@
     </nav>
 
     <div class="nav-actions">
-      <button class="btn-icon" id="btn-sound-toggle" title="Звуковые сигналы" onclick="toggleSound()">
+      <button class="btn-icon" id="btn-sound-toggle" title="Звук" onclick="toggleSound()">
         <svg id="icon-sound" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
       </button>
-      <button class="btn-icon" id="btn-settings" title="Настройки сети и профиля" onclick="openSettingsModal()">
+      <button class="btn-icon" id="btn-settings" title="Настройки" onclick="openSettingsModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
 
@@ -822,7 +822,7 @@
 
       <button class="btn btn-primary" onclick="openCreateModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Создать сеть
+        Создать комнату
       </button>
       <button class="btn btn-secondary" onclick="openJoinModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -842,7 +842,7 @@
           <div id="room-standby">
             <h2 style="font-size: 22px; margin: 4px 0 8px;">Сеть не подключена</h2>
             <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 24px; line-height: 1.5;">
-              Создайте комнату для совместной игры или введите 6-значный код комнаты хоста для подключения через P2P туннель.
+              Создайте комнату или подключитесь по коду.
             </p>
             <div style="display: flex; gap: 10px;">
               <button class="btn btn-primary" onclick="openCreateModal()">Создать комнату</button>
@@ -868,7 +868,7 @@
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="p2p-badge p2p-badge-direct" id="tunnel-status-badge">
                     <span class="status-dot online"></span>
-                    ИГРОВОЙ МОСТ АКТИВЕН
+                    ТУННЕЛЬ АКТИВЕН
                   </span>
                   <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);" id="tunnel-game-name">MINECRAFT</span>
                 </div>
@@ -877,21 +877,21 @@
 
               <!-- HOST CONTROLS -->
               <div id="tunnel-host-panel" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <span style="font-size: 12px; color: var(--text-muted);">Порт из Minecraft:</span>
+                <span style="font-size: 12px; color: var(--text-muted);">Порт игры:</span>
                 <input type="number" id="host-game-port-input" value="25565" style="width: 80px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); background: #1c1c21; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
-                <button class="btn btn-secondary btn-sm" onclick="applyHostGamePort()">Обновить порт</button>
-                <span style="font-size: 11px; color: var(--text-dim);">(укажи порт из чата «Мир открыт на порту XXXXX»)</span>
+                <button class="btn btn-secondary btn-sm" onclick="applyHostGamePort()">Обновить</button>
+                <span style="font-size: 11px; color: var(--text-dim);">(порт локального сервера)</span>
               </div>
 
               <!-- CLIENT CONTROLS -->
               <div id="tunnel-client-panel" style="display: none; justify-content: space-between; align-items: center; gap: 8px;">
                 <div>
-                  <div style="font-size: 11px; color: var(--text-dim);">Адрес для входа в Minecraft:</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Прямое подключение:</div>
                   <div style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--green);" id="tunnel-client-addr">127.0.0.1:25565</div>
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="copyTunnelAddr()">
                   <svg class="ui-icon"><use href="#icon-copy"></use></svg>
-                  Скопировать для Minecraft
+                  Скопировать
                 </button>
               </div>
             </div>
@@ -900,15 +900,15 @@
             <div id="steam-p2p-card" style="display: none; background: #111622; border: 1px solid #1e3a5f; border-radius: 8px; padding: 12px; margin: 8px 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="p2p-badge" style="background: rgba(30, 144, 255, 0.15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.4);" id="steam-status-badge">
-                    <svg class="ui-icon" style="width: 13px; height: 13px; margin-right: 4px;"><use href="#icon-steam"></use></svg>
-                    STEAM P2P (VALVE SDR)
+                  <span class="p2p-badge" style="background: rgba(30, 144, 255, 0.12); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.35); display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; font-weight: 700;" id="steam-status-badge">
+                    <svg class="ui-icon" style="width: 15px; height: 15px; flex-shrink: 0;"><use href="#icon-steam"></use></svg>
+                    STEAM P2P
                   </span>
-                  <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">SDR Ping: ~15 ms</div>
+                  <div style="font-size: 11px; color: #38bdf8; font-family: var(--font-mono);" id="steam-rtt-lbl">Пинг: ~15 ms</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--green);" id="steam-auto-status">
                   <span class="status-dot online"></span>
-                  <span>Туннель активен</span>
+                  <span>Подключено</span>
                 </div>
               </div>
 
@@ -916,7 +916,7 @@
               <div id="steam-warning-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #f87171; margin-bottom: 8px; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <svg class="ui-icon" style="color: var(--red);"><use href="#icon-alert"></use></svg>
-                  <span>Steam не обнаружен. Запустите клиент Steam на компьютере.</span>
+                  <span>Steam не запущен. Откройте клиент Steam.</span>
                 </div>
                 <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10px;" onclick="refreshSteamStatus()">
                   <svg class="ui-icon ui-icon-sm"><use href="#icon-refresh"></use></svg>
@@ -935,7 +935,7 @@
                   </button>
                 </div>
                 <div style="font-size: 11px; color: var(--text-dim);">
-                  Игроки подключаются автоматически при входе в комнату
+                  Автоподключение участников
                 </div>
               </div>
 
@@ -943,21 +943,21 @@
               <div id="steam-client-panel" style="display: none; justify-content: space-between; align-items: center; gap: 12px;">
                 <div>
                   <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 2px;">
-                    Адрес для прямого входа:
+                    Прямое подключение:
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--green);" id="steam-client-addr">127.0.0.1:25565</span>
-                    <span style="font-size: 11px; color: #38bdf8;">• Сервер также доступен в списке LAN игр</span>
+                    <span style="font-size: 11px; color: #38bdf8;">(виден в поиске LAN)</span>
                   </div>
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="copySteamGameAddr()">
                   <svg class="ui-icon"><use href="#icon-copy"></use></svg>
-                  Скопировать IP
+                  Скопировать
                 </button>
               </div>
             </div>
 
-            <div class="card-title-badge" id="peers-count-lbl" style="margin-top: 6px;">УЧАСТНИКИ (0/16):</div>
+            <div class="card-title-badge" id="peers-count-lbl" style="margin-top: 6px;">УЧАСТНИКИ (0/16)</div>
             <div id="peers-list" style="flex: 1; overflow-y: auto; margin-top: 4px;"></div>
           </div>
         </div>
@@ -967,17 +967,17 @@
           <!-- VIRTUAL IP CARD -->
           <div class="card">
             <div class="card-title-badge">
-              <span>ВАШ ВИРТУАЛЬНЫЙ IP</span>
+              <span>ВИРТУАЛЬНЫЙ IP</span>
               <span class="p2p-badge p2p-badge-direct">10.42.0.0/24</span>
             </div>
             <div class="mono-val" id="my-ip-lbl">10.42.0.X</div>
-            <button class="btn btn-secondary btn-sm" style="align-self: flex-start;" onclick="copyMyIp()">Копировать IP</button>
+            <button class="btn btn-secondary btn-sm" style="align-self: flex-start;" onclick="copyMyIp()">Скопировать IP</button>
           </div>
 
           <!-- LIVE PING / JITTER MONITOR -->
           <div class="card">
             <div class="card-title-badge">
-              <span>КАЧЕСТВО СВЯЗИ (LIVE RTT)</span>
+              <span>ЗАДЕРЖКА (RTT)</span>
               <span id="telemetry-status-pill" class="p2p-badge p2p-badge-direct">P2P DIRECT</span>
             </div>
             <div style="display: flex; align-items: baseline; justify-content: space-between;">
@@ -1012,11 +1012,11 @@
           <!-- ROUTE & SHIELD CARD -->
           <div class="card">
             <div class="card-title-badge">
-              <span>ШЛЮЗ И МАРШРУТИЗАЦИЯ</span>
-              <span class="p2p-badge p2p-badge-direct">PROXY SAFE</span>
+              <span>ШЛЮЗ NAT</span>
+              <span class="p2p-badge p2p-badge-direct" id="overview-nat-badge">P2P DIRECT</span>
             </div>
-            <div style="font-size: 13px; font-weight: 700; margin: 2px 0;">Restricted Cone NAT</div>
-            <div style="font-size: 11px; color: var(--text-muted);">UPnP IGD авто-проброс портов активен</div>
+            <div style="font-size: 13px; font-weight: 700; margin: 2px 0;" id="overview-nat-title">Restricted Cone NAT</div>
+            <div style="font-size: 11px; color: var(--text-muted);" id="overview-upnp-status">UPnP проброс портов активен</div>
           </div>
         </div>
       </div>
@@ -1042,19 +1042,19 @@
 
     <!-- 3. RADAR VIEW -->
     <section id="view-radar" class="view-pane">
-      <h2 style="font-size: 18px; margin-bottom: 4px;">LAN Радар (Автопоиск серверов)</h2>
+      <h2 style="font-size: 18px; margin-bottom: 4px;">LAN Радар</h2>
       <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-        LANForge перехватывает широковещательные UDP-пакеты игр (Minecraft, Source) и ретранслирует их всем участникам комнаты.
+        Поиск локальных миров в комнате через широковещательные UDP-пакеты.
       </p>
       <div class="card" style="padding: 12px 16px; margin-bottom: 12px; flex-direction: row; align-items: center; gap: 8px;">
         <span class="online-dot"></span>
         <span style="font-family: var(--font-mono); font-size: 11px; color: var(--green); font-weight: 700;">
-          СКАНИРОВАНИЕ UDP 255.255.255.255 & MULTICAST 224.0.2.60 АКТИВНО
+          СКАНИРОВАНИЕ UDP & MULTICAST АКТИВНО
         </span>
       </div>
       <div class="card" id="radar-list" style="flex: 1; overflow-y: auto;">
         <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 40px;">
-          Активных LAN-миров в сети пока не обнаружено.<br>Откройте мир для сети в Minecraft или запустите локальный сервер.
+          Локальных миров пока не обнаружено.<br>Откройте мир для сети в игре.
         </div>
       </div>
     </section>
@@ -1075,14 +1075,14 @@
     <section id="view-diag" class="view-pane">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
         <div>
-          <h2 style="font-size: 18px;">Центр сетевой диагностики и телеметрии</h2>
+          <h2 style="font-size: 18px;">Диагностика сети</h2>
           <p style="font-size: 11px; color: var(--text-muted);">
-            Мониторинг P2P-туннелей, устойчивость к VPN/Clash и задержки глобального пула STUN-узлов.
+            Мониторинг соединений, NAT и задержки серверов.
           </p>
         </div>
         <button class="btn btn-secondary btn-sm" id="btn-probe-stun" onclick="triggerStunBenchmark()">
           <svg class="ui-icon ui-icon-sm"><use href="#icon-zap"></use></svg>
-          Тест STUN-пула
+          Тест STUN
         </button>
       </div>
 
@@ -1090,25 +1090,25 @@
       <div class="topology-flow">
         <div class="topo-node">
           <div class="topo-circle"><svg class="ui-icon ui-icon-lg"><use href="#icon-laptop"></use></svg></div>
-          <span class="topo-label">Локальный узел</span>
+          <span class="topo-label">Локальный ПК</span>
           <span class="topo-sub" id="topo-local-ip">127.0.0.1</span>
         </div>
         <div class="topo-line"></div>
         <div class="topo-node">
           <div class="topo-circle" style="border-color: var(--green);"><svg class="ui-icon ui-icon-lg" style="color: var(--green);"><use href="#icon-shield"></use></svg></div>
-          <span class="topo-label">Шлюз NAT / VPN</span>
+          <span class="topo-label">NAT / VPN</span>
           <span class="topo-sub" id="topo-nat-type">Restricted Cone</span>
         </div>
         <div class="topo-line"></div>
         <div class="topo-node">
           <div class="topo-circle" style="border-color: var(--accent);"><svg class="ui-icon ui-icon-lg" style="color: var(--accent);"><use href="#icon-globe"></use></svg></div>
-          <span class="topo-label">P2P Virtual Subnet</span>
+          <span class="topo-label">Виртуальная сеть</span>
           <span class="topo-sub">10.42.0.0/24</span>
         </div>
         <div class="topo-line"></div>
         <div class="topo-node">
           <div class="topo-circle"><svg class="ui-icon ui-icon-lg"><use href="#icon-users"></use></svg></div>
-          <span class="topo-label">Пиры в комнате</span>
+          <span class="topo-label">Участники</span>
           <span class="topo-sub" id="topo-peers-count">0 активных</span>
         </div>
       </div>
@@ -1117,46 +1117,46 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
         <div class="card" style="padding: 12px 14px;">
           <div class="card-title-badge">
-            <span>NAT ТИП И ТОПОЛОГИЯ</span>
-            <span class="p2p-badge p2p-badge-direct">FULL P2P</span>
+            <span>ТИП NAT</span>
+            <span class="p2p-badge p2p-badge-direct" id="diag-nat-badge">P2P DIRECT</span>
           </div>
-          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">Restricted Cone NAT</div>
-          <div style="font-size: 11px; color: var(--green);">Прямое P2P-соединение активно без задержек TURN-реле</div>
+          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;" id="diag-nat-title">Определение NAT...</div>
+          <div style="font-size: 11px; color: var(--green);" id="diag-nat-sub">Анализ STUN...</div>
         </div>
 
         <div class="card" style="padding: 12px 14px;">
           <div class="card-title-badge">
-            <span>ПРОКСИ И VPN-МАРШРУТИЗАЦИЯ</span>
-            <span class="p2p-badge p2p-badge-direct">ACTIVE</span>
+            <span>ПРОКСИ И МАРШРУТИЗАЦИЯ</span>
+            <span class="p2p-badge p2p-badge-direct" id="diag-proxy-badge">ACTIVE</span>
           </div>
-          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">Proxy Bypass: 127.0.0.1; 10.42.*</div>
-          <div style="font-size: 11px; color: var(--green);">Устойчив к Clash Verge, TUN-режиму и Fake-IP (198.18.0.0/15)</div>
+          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;" id="diag-proxy-title">Прямой доступ</div>
+          <div style="font-size: 11px; color: var(--green);" id="diag-proxy-sub">Обход прокси: 127.0.0.1; 10.42.*</div>
         </div>
 
         <div class="card" style="padding: 12px 14px;">
           <div class="card-title-badge">
-            <span>UPNP IGD ПОРТЫ</span>
-            <span class="p2p-badge p2p-badge-direct">AUTO</span>
+            <span>ПОРТЫ UPNP</span>
+            <span class="p2p-badge p2p-badge-direct" id="diag-upnp-badge">AUTO</span>
           </div>
-          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">Совместимый шлюз обнаружен</div>
-          <div style="font-size: 11px; color: var(--green);">Авто-маппинг портов 25565, 7777, 27015 включен</div>
+          <div style="font-size: 14px; font-weight: 700; margin: 2px 0;" id="diag-upnp-title">Шлюз UPnP</div>
+          <div style="font-size: 11px; color: var(--green);" id="diag-upnp-sub">Проверка шлюза...</div>
         </div>
 
         <div class="card" style="padding: 12px 14px;">
           <div class="card-title-badge">
-            <span>MTU И БУФЕРЫ</span>
+            <span>MTU</span>
             <span class="p2p-badge p2p-badge-direct">1420 B</span>
           </div>
           <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">MTU: 1420 байт</div>
-          <div style="font-size: 11px; color: var(--text-muted);">Размер пакета без фрагментации UDP</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Оптимальный размер пакета UDP</div>
         </div>
       </div>
 
       <!-- STUN BENCHMARK MATRIX -->
       <div class="card" style="padding: 12px 14px; flex: 1;">
         <div class="card-title-badge">
-          <span>ТЕСТ STUN-СЕРВЕРОВ (RTT)</span>
-          <span id="stun-matrix-status" style="font-size: 10px; color: var(--text-dim);">Готов к тестированию</span>
+          <span>STUN СЕРВЕРЫ</span>
+          <span id="stun-matrix-status" style="font-size: 10px; color: var(--text-dim);">Готов</span>
         </div>
         <div class="stun-matrix-grid" id="stun-matrix-container"></div>
       </div>
@@ -1172,10 +1172,10 @@
       <label class="card-title-badge">ИГРОВОЙ ПРЕСЕТ</label>
       <select class="input-field" id="create-game-preset"></select>
       <label class="card-title-badge">ПАРОЛЬ (НЕОБЯЗАТЕЛЬНО)</label>
-      <input type="password" class="input-field" id="create-room-pass" placeholder="Оставьте пустым для открытого входа" onkeydown="if(event.key==='Enter') submitCreateRoom()">
+      <input type="password" class="input-field" id="create-room-pass" placeholder="Без пароля" onkeydown="if(event.key==='Enter') submitCreateRoom()">
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
-        <button class="btn btn-primary" onclick="submitCreateRoom()">Создать комнату</button>
+        <button class="btn btn-primary" onclick="submitCreateRoom()">Создать</button>
       </div>
     </div>
   </div>
@@ -1183,11 +1183,11 @@
   <!-- JOIN ROOM MODAL -->
   <div class="modal-overlay" id="join-modal" onclick="onOverlayClick(event, 'join-modal')">
     <div class="modal-box">
-      <h3 style="font-size: 16px; margin-bottom: 14px;">Войти в комнату по коду</h3>
+      <h3 style="font-size: 16px; margin-bottom: 14px;">Войти по коду</h3>
       <label class="card-title-badge">КОД КОМНАТЫ</label>
       <input type="text" class="input-field" id="join-room-code" placeholder="LAN-XXXX" style="font-family: var(--font-mono); text-transform: uppercase;" onkeydown="if(event.key==='Enter') submitJoinRoom()">
-      <label class="card-title-badge">ПАРОЛЬ (ЕСЛИ ТРЕБУЕТСЯ)</label>
-      <input type="password" class="input-field" id="join-room-pass" onkeydown="if(event.key==='Enter') submitJoinRoom()">
+      <label class="card-title-badge">ПАРОЛЬ</label>
+      <input type="password" class="input-field" id="join-room-pass" placeholder="Если установлен" onkeydown="if(event.key==='Enter') submitJoinRoom()">
       <div style="font-size: 11px; color: var(--text-dim); margin: 8px 0; line-height: 1.4; display: flex; align-items: center; gap: 4px;">
         <svg class="ui-icon ui-icon-sm"><use href="#icon-globe"></use></svg>
         <span>Сервер подключения:</span>
@@ -1205,32 +1205,32 @@
     <div class="modal-box" style="width: 440px;">
       <h3 style="font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
         <svg class="ui-icon"><use href="#icon-settings"></use></svg>
-        Настройки сети и профиля
+        Настройки
       </h3>
       
-      <label class="card-title-badge">ВАШ ИГРОВОЙ НИКНЕЙМ</label>
+      <label class="card-title-badge">НИКНЕЙМ</label>
       <input type="text" class="input-field" id="settings-nick" placeholder="Player_123">
 
-      <label class="card-title-badge">СИГНАЛИНГ СЕРВЕР СЕТИ (P2P ХАБ)</label>
+      <label class="card-title-badge">ТИП ПОДКЛЮЧЕНИЯ</label>
       <select class="input-field" id="settings-server-mode" onchange="onServerModeChange()">
-        <option value="cloud">Глобальный облачный сервер (По умолчанию: lanforge.onrender.com)</option>
-        <option value="steam">Steam P2P (Valve SDR - минимальный пинг)</option>
-        <option value="local">Встроенный локальный сервер (127.0.0.1:8787)</option>
-        <option value="custom">Пользовательский сервер (Свой VPS / IP)</option>
+        <option value="cloud">Облачный сервер (Render)</option>
+        <option value="steam">Steam P2P (прямой туннель)</option>
+        <option value="local">Локальный сервер (127.0.0.1)</option>
+        <option value="custom">Свой сервер (VPS / IP)</option>
       </select>
 
       <div id="settings-custom-url-container" style="display: none;">
-        <label class="card-title-badge">АДРЕС ПОЛЬЗОВАТЕЛЬСКОГО СЕРВЕРА (WS / WSS)</label>
+        <label class="card-title-badge">АДРЕС СЕРВЕРА (WS / WSS)</label>
         <input type="text" class="input-field" id="settings-custom-url" placeholder="ws://my-vps.com:8787">
       </div>
 
       <div id="settings-mode-hint" style="background: #18181c; border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: var(--text-dim); line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
         <svg class="ui-icon ui-icon-sm" style="margin-top: 2px;"><use href="#icon-info"></use></svg>
-        <div><b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Никаких настроек портов и IP не требуется!</div>
+        <div><b>Облачный сервер:</b> Подключение через сервер Render. Работает без Steam.</div>
       </div>
 
       <div style="margin-top: 14px; padding: 10px; background: #121215; border: 1px solid var(--border); border-radius: 6px;">
-        <label class="card-title-badge" style="margin-bottom: 6px;">ДИАГНОСТИКА И ЛОГИ СИСТЕМЫ</label>
+        <label class="card-title-badge" style="margin-bottom: 6px;">ДИАГНОСТИКА И ЛОГИ</label>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-secondary" style="flex: 1; font-size: 11px;" onclick="openLogDir()">
             <svg class="ui-icon ui-icon-sm"><use href="#icon-folder"></use></svg>
@@ -1245,13 +1245,13 @@
 
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
         <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
-        <button class="btn btn-primary" onclick="saveSettings()">Сохранить настройки</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
       </div>
 
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.0.3</span>
+          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.2.0</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1341,6 +1341,8 @@
       renderPresets();
       renderStunMatrix();
       connectWebSocket(currentServerUrl);
+      checkUPnPStatus();
+      detectNATAndRouting();
 
       // Listen for pywebview ready to load persistent native config
       window.addEventListener("pywebviewready", () => {
@@ -1603,7 +1605,7 @@
           }
         } else {
           if (window.pywebview.api.update_presence) {
-            window.pywebview.api.update_presence("В главном меню", "P2P Virtual Gaming Hub v1.5.0");
+            window.pywebview.api.update_presence("В главном меню", "P2P Virtual Gaming Hub");
           }
           if (window.pywebview.api.update_tray) {
             window.pywebview.api.update_tray("Вне сети", "10.42.0.1");
@@ -1631,8 +1633,8 @@
           switchTab("overview");
           playSound(msg.type === "room_created" ? "create" : "join");
           syncNativePresence();
-          showToast(msg.type === "room_created" ? "Комната создана!" : "Подключено к комнате!");
-          notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы подключились к комнате");
+          showToast(msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
+          notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
           if (currentRoom && currentRoom.hostId === myId) {
             setTimeout(broadcastSteamHostInfo, 600);
           }
@@ -1687,7 +1689,7 @@
             if (hostInput) hostInput.value = msg.port;
             const clientAddr = document.getElementById("tunnel-client-addr");
             if (clientAddr) clientAddr.textContent = `127.0.0.1:${msg.port}`;
-            showToast(`Хост изменил порт игры на: ${msg.port}`);
+            showToast(`Порт игры изменен: ${msg.port}`);
             // If client, restart tunnel on new port
             if (currentRoom && myId !== currentRoom.hostId) {
               startTunnelForRoom();
@@ -1702,8 +1704,8 @@
             syncNativePresence();
             if (msg.newHostId === myId) {
               playSound("create");
-              showToast("Вы назначены хостом комнаты!");
-              notifyNative("LANForge", "Вы назначены хостом комнаты");
+              showToast("Вы назначены хостом");
+              notifyNative("LANForge", "Вы назначены хостом");
             }
           }
           break;
@@ -1729,13 +1731,15 @@
         case "pong":
           if (msg.clientTimestamp) {
             const rtt = Math.max(1, Date.now() - msg.clientTimestamp);
-            recordPingSample(rtt);
+            if (currentServerMode !== "steam") {
+              recordPingSample(rtt);
+            }
           }
           break;
 
         case "stun_probes_result":
           if (msg.stunProbes) {
-            updateStunMatrixResults(msg.stunProbes);
+            updateStunMatrixResults(msg.stunProbes, msg.nat);
           }
           break;
 
@@ -1839,7 +1843,7 @@
       btn.innerHTML = '<svg class="ui-icon ui-icon-sm"><use href="#icon-refresh"></use></svg> Опрос серверов...';
       btn.disabled = true;
       btn.style.opacity = "0.6";
-      statusEl.innerText = "Параллельный опрос 9 глобальных узлов...";
+      statusEl.innerText = "Опрос узлов...";
 
       STUN_SERVERS.forEach((_, idx) => {
         const valEl = document.getElementById("stun-val-" + idx);
@@ -1851,17 +1855,17 @@
 
       if (stunTimeoutTimer) clearTimeout(stunTimeoutTimer);
       stunTimeoutTimer = setTimeout(() => {
-        btn.innerHTML = '<svg class="ui-icon ui-icon-sm"><use href="#icon-zap"></use></svg> Тест STUN-пула';
+        btn.innerHTML = '<svg class="ui-icon ui-icon-sm"><use href="#icon-zap"></use></svg> Тест STUN';
         btn.disabled = false;
         btn.style.opacity = "1";
-        statusEl.innerText = "Тест завершен";
+        statusEl.innerText = "Готово";
       }, 4000);
 
       fetch("http://127.0.0.1:8787/api/probe-stun")
         .then(res => res.json())
         .then(data => {
           if (data && data.stunProbes) {
-            updateStunMatrixResults(data.stunProbes);
+            updateStunMatrixResults(data.stunProbes, data.nat);
           }
         })
         .catch(err => {
@@ -1870,14 +1874,18 @@
         });
     }
 
-    function updateStunMatrixResults(probes) {
+    function updateStunMatrixResults(probes, nat) {
       if (stunTimeoutTimer) clearTimeout(stunTimeoutTimer);
       const btn = document.getElementById("btn-probe-stun");
       const statusEl = document.getElementById("stun-matrix-status");
-      btn.innerHTML = '<svg class="ui-icon ui-icon-sm"><use href="#icon-zap"></use></svg> Тест STUN-пула';
+      btn.innerHTML = '<svg class="ui-icon ui-icon-sm"><use href="#icon-zap"></use></svg> Тест STUN';
       btn.disabled = false;
       btn.style.opacity = "1";
-      statusEl.innerText = "Тест успешно завершен";
+      statusEl.innerText = "Готово";
+
+      if (nat) {
+        applyNatTelemetry(nat);
+      }
 
       probes.forEach(probe => {
         const idx = STUN_SERVERS.findIndex(s => s.server === probe.server);
@@ -1908,6 +1916,15 @@
       const btn = document.getElementById("nav-btn-" + tabId);
       if (btn) btn.classList.add("active");
 
+      if (tabId === "radar") {
+        fetchRadarGames();
+      }
+
+      if (tabId === "diag") {
+        checkUPnPStatus();
+        detectNATAndRouting();
+      }
+
       if (tabId === "chat") {
         const unreadDot = document.getElementById("chat-unread-dot");
         if (unreadDot) unreadDot.style.display = "none";
@@ -1918,6 +1935,139 @@
           if (box) box.scrollTop = box.scrollHeight;
         }, 50);
       }
+    }
+
+    function fetchRadarGames() {
+      fetch("http://127.0.0.1:8787/api/radar/games")
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.games && Array.isArray(data.games)) {
+            data.games.forEach(g => {
+              const idx = discoveredGames.findIndex(x => x.ip === g.ip && x.port === g.port);
+              if (idx >= 0) discoveredGames[idx] = g;
+              else discoveredGames.push(g);
+            });
+            renderRadarGames();
+          }
+        })
+        .catch(() => {});
+    }
+
+    function checkUPnPStatus() {
+      fetch("http://127.0.0.1:8787/api/upnp/status")
+        .then(res => res.json())
+        .then(res => {
+          const badge = document.getElementById("diag-upnp-badge");
+          const title = document.getElementById("diag-upnp-title");
+          const sub = document.getElementById("diag-upnp-sub");
+          const ovSub = document.getElementById("overview-upnp-status");
+          if (res && res.available) {
+            if (badge) {
+              badge.className = "p2p-badge p2p-badge-direct";
+              badge.textContent = "ONLINE";
+            }
+            if (title) title.textContent = `Шлюз: ${res.routerIp || 'Обнаружен'}`;
+            if (sub) {
+              sub.textContent = `Локальный IP: ${res.localIp || '127.0.0.1'}`;
+              sub.style.color = "var(--green)";
+            }
+            if (ovSub) ovSub.textContent = `UPnP активен (${res.routerIp || 'шлюз'})`;
+          } else {
+            if (badge) {
+              badge.className = "p2p-badge p2p-badge-relay";
+              badge.textContent = "OFFLINE";
+            }
+            if (title) title.textContent = "UPnP недоступен";
+            if (sub) {
+              sub.textContent = "Прямой проброс выключен в роутере";
+              sub.style.color = "var(--text-dim)";
+            }
+            if (ovSub) ovSub.textContent = "Прямой туннель через P2P";
+          }
+        })
+        .catch(() => {});
+    }
+
+    function applyNatTelemetry(nat) {
+      if (!nat) return;
+
+      const overviewBadge = document.getElementById("overview-nat-badge");
+      const overviewTitle = document.getElementById("overview-nat-title");
+      const diagBadge = document.getElementById("diag-nat-badge");
+      const diagTitle = document.getElementById("diag-nat-title");
+      const diagSub = document.getElementById("diag-nat-sub");
+      const topoNat = document.getElementById("topo-nat-type");
+
+      const proxyBadge = document.getElementById("diag-proxy-badge");
+      const proxyTitle = document.getElementById("diag-proxy-title");
+      const proxySub = document.getElementById("diag-proxy-sub");
+
+      let natName = "Restricted Cone NAT";
+      let badgeText = "P2P DIRECT";
+      let badgeClass = "p2p-badge p2p-badge-direct";
+      let subText = "Прямое P2P-соединение";
+      let subColor = "var(--green)";
+
+      if (nat.natType === "FullCone") {
+        natName = "Full Cone NAT";
+        badgeText = "FULL P2P";
+        badgeClass = "p2p-badge p2p-badge-direct";
+        subText = "Прямой P2P без ограничений";
+      } else if (nat.natType === "Symmetric") {
+        natName = "Symmetric NAT";
+        badgeText = "RELAY NEEDED";
+        badgeClass = "p2p-badge p2p-badge-relay";
+        subText = "Рекомендуется Steam P2P или UPnP";
+        subColor = "var(--amber)";
+      } else {
+        natName = "Restricted Cone NAT";
+        badgeText = "P2P DIRECT";
+        badgeClass = "p2p-badge p2p-badge-direct";
+        subText = "Прямое P2P через STUN";
+      }
+
+      if (overviewBadge) {
+        overviewBadge.className = badgeClass;
+        overviewBadge.textContent = badgeText;
+      }
+      if (overviewTitle) overviewTitle.textContent = natName;
+
+      if (diagBadge) {
+        diagBadge.className = badgeClass;
+        diagBadge.textContent = badgeText;
+      }
+      if (diagTitle) diagTitle.textContent = natName;
+      if (diagSub) {
+        diagSub.textContent = subText + (nat.publicIp && nat.publicIp !== "127.0.0.1" ? ` (IP: ${nat.publicIp})` : "");
+        diagSub.style.color = subColor;
+      }
+
+      if (topoNat) {
+        topoNat.textContent = nat.isBehindVpn ? `${natName} (VPN)` : natName;
+      }
+
+      if (proxyBadge && proxyTitle && proxySub) {
+        if (nat.isBehindVpn) {
+          proxyBadge.className = "p2p-badge p2p-badge-direct";
+          proxyBadge.textContent = "VPN ACTIVE";
+          proxyTitle.textContent = nat.vpnName ? `VPN: ${nat.vpnName}` : "Системный VPN обнаружен";
+          proxySub.textContent = "Обход туннеля активен (127.0.0.1, 10.42.*)";
+          proxySub.style.color = "var(--green)";
+        } else {
+          proxyBadge.className = "p2p-badge p2p-badge-direct";
+          proxyBadge.textContent = "DIRECT";
+          proxyTitle.textContent = "Прямое подключение";
+          proxySub.textContent = "Обход прокси активен: 127.0.0.1; 10.42.*";
+          proxySub.style.color = "var(--green)";
+        }
+      }
+    }
+
+    function detectNATAndRouting() {
+      fetch("http://127.0.0.1:8787/api/nat")
+        .then(res => res.json())
+        .then(nat => applyNatTelemetry(nat))
+        .catch(() => {});
     }
 
     function renderPresets() {
@@ -1972,7 +2122,7 @@
       if (!discoveredGames || discoveredGames.length === 0) {
         list.innerHTML = `
           <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 40px;">
-            Активных LAN-миров в сети пока не обнаружено.<br>Откройте мир для сети в Minecraft или запустите локальный сервер.
+            Локальных миров пока не обнаружено.<br>Откройте мир для сети в игре.
           </div>
         `;
         return;
@@ -1996,11 +2146,12 @@
               Хост: ${escapeHtml(addrStr)} ${g.extra ? `• ${escapeHtml(g.extra)}` : ''}
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="copyText('${addrStr}')">
-            <svg class="ui-icon ui-icon-sm"><use href="#icon-copy"></use></svg>
-            Скопировать IP
-          </button>
         `;
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "btn btn-primary btn-sm";
+        copyBtn.innerHTML = `<svg class="ui-icon ui-icon-sm"><use href="#icon-copy"></use></svg> Скопировать`;
+        copyBtn.onclick = () => copyText(addrStr);
+        card.appendChild(copyBtn);
         list.appendChild(card);
       });
     }
@@ -2061,12 +2212,26 @@
         if (!steamPollTimer) {
           steamPollTimer = setInterval(refreshSteamStatus, 3000);
         }
+        const pill = document.getElementById("telemetry-status-pill");
+        if (pill) {
+          pill.className = "p2p-badge p2p-badge-direct";
+          pill.textContent = "STEAM SDR";
+        }
+        const proto = document.getElementById("metric-proto");
+        if (proto) proto.textContent = "VALVE SDR";
       } else {
         if (steamCard) steamCard.style.display = "none";
         if (steamPollTimer) {
           clearInterval(steamPollTimer);
           steamPollTimer = null;
         }
+        const pill = document.getElementById("telemetry-status-pill");
+        if (pill) {
+          pill.className = "p2p-badge p2p-badge-direct";
+          pill.textContent = "P2P DIRECT";
+        }
+        const proto = document.getElementById("metric-proto");
+        if (proto) proto.textContent = "UDP/P2P";
         if (tunnelCard && hostPanel && clientPanel) {
           tunnelCard.style.display = "block";
           if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "MINECRAFT";
@@ -2088,7 +2253,7 @@
       }
 
       const peers = currentRoom.peers || [];
-      document.getElementById("peers-count-lbl").innerText = `УЧАСТНИКИ (${peers.length}/${currentRoom.maxPeers || 16}):`;
+      document.getElementById("peers-count-lbl").innerText = `УЧАСТНИКИ (${peers.length}/${currentRoom.maxPeers || 16})`;
       if (topoPeers) topoPeers.innerText = `${peers.length} в сети`;
 
       const list = document.getElementById("peers-list");
@@ -2197,13 +2362,13 @@
       }
 
       if (mode === "steam") {
-        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Steam P2P (SDR):</b> Трафик идет через приватную сеть Valve. Минимальный пинг, обход любого NAT и авто-соединение! Требуется запущенный клиент Steam.`;
+        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Steam P2P:</b> Прямое соединение через сеть Valve с минимальным пингом. Требуется запущенный клиент Steam.`;
       } else if (mode === "cloud") {
-        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>По умолчанию:</b> Подключение идет через глобальный облачный хаб (Render). Работает автономно, Steam не требуется!`;
+        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Облачный сервер:</b> Подключение через сервер Render. Работает без Steam.`;
       } else if (mode === "local") {
-        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Локальный хаб:</b> Для игры внутри одной домашней Wi-Fi сети без интернета.`;
+        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Локальный сервер:</b> Для игры внутри домашней сети без интернета.`;
       } else if (mode === "custom") {
-        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Пользовательский сервер:</b> Укажите WebSocket URL вашего собственного VPS или выделенного сервера.`;
+        if (hint) hint.innerHTML = `<svg class="ui-icon ui-icon-sm" style="margin-right: 4px;"><use href="#icon-info"></use></svg> <b>Свой сервер:</b> WebSocket URL вашего VPS или хоста.`;
       }
     }
 
@@ -2240,7 +2405,7 @@
       }
 
       closeModals();
-      showToast("Настройки профиля сохранены");
+      showToast("Настройки сохранены");
 
       if (urlChanged) {
         connectWebSocket(currentServerUrl);
@@ -2369,13 +2534,13 @@
       const port = parseInt(portInput.value) || 25565;
       startTunnelForRoom();
       sendWS({ type: "update_room_port", port: port });
-      showToast(`Порт хоста обновлен: ${port}`);
+      showToast(`Порт обновлен: ${port}`);
     }
 
     function copyTunnelAddr() {
       const addr = `127.0.0.1:${currentListenPort}`;
       copyText(addr);
-      showToast(`Адрес ${addr} скопирован! Вставьте в сетевой игре Minecraft`);
+      showToast(`Скопировано: ${addr}`);
     }
 
     let steamPollTimer = null;
@@ -2422,38 +2587,20 @@
           }
         }
 
-        const clientFriendsSelect = document.getElementById("steam-client-friends-select");
-        if (friendsSelect && res.state.friends) {
-          const prevVal = friendsSelect.value;
-          friendsSelect.innerHTML = '<option value="">-- Выберите друга в Steam --</option>';
-          res.state.friends.forEach(f => {
-            const opt = document.createElement("option");
-            opt.value = f.steam_id;
-            opt.textContent = `${f.name} ${f.online ? '[В сети]' : ''}`;
-            friendsSelect.appendChild(opt);
-          });
-          if (prevVal) friendsSelect.value = prevVal;
-        }
-
-        if (clientFriendsSelect && res.state.friends) {
-          const prevClientVal = clientFriendsSelect.value;
-          clientFriendsSelect.innerHTML = '<option value="">-- Выберите хоста из друзей --</option>';
-          res.state.friends.forEach(f => {
-            const opt = document.createElement("option");
-            opt.value = f.steam_id;
-            opt.textContent = `${f.name} ${f.online ? '[В сети]' : ''}`;
-            clientFriendsSelect.appendChild(opt);
-          });
-          if (prevClientVal) clientFriendsSelect.value = prevClientVal;
+        let steamPing = -1;
+        if (res.state.ping !== undefined && res.state.ping >= 0) {
+          steamPing = res.state.ping;
+        } else if (res.state.connections && res.state.connections.length > 0 && res.state.connections[0].ping_ms >= 0) {
+          steamPing = res.state.connections[0].ping_ms;
         }
 
         const rttLbl = document.getElementById("steam-rtt-lbl");
-        if (rttLbl) {
-          if (res.state.ping !== undefined && res.state.ping >= 0) {
-            rttLbl.textContent = `SDR Ping: ${res.state.ping} ms`;
-          } else if (res.state.connections && res.state.connections.length > 0 && res.state.connections[0].ping_ms >= 0) {
-            rttLbl.textContent = `SDR Ping: ${res.state.connections[0].ping_ms} ms`;
-          }
+        if (rttLbl && steamPing >= 0) {
+          rttLbl.textContent = `Пинг: ${steamPing} ms`;
+        }
+
+        if (currentServerMode === "steam" && steamPing >= 0) {
+          recordPingSample(steamPing);
         }
 
         if (res.state.clientActive && res.state.clientPort) {
@@ -2463,27 +2610,7 @@
       }
     }
 
-    function onSelectClientSteamFriend() {
-      const sel = document.getElementById("steam-client-friends-select");
-      if (sel && sel.value) {
-        const targetInput = document.getElementById("steam-target-id-input");
-        if (targetInput) targetInput.value = sel.value;
-      }
-    }
-
     let hasAnnouncedSteamHost = false;
-
-    function installSpacewarNative() {
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_install_spacewar) {
-        window.pywebview.api.steam_install_spacewar().then(res => {
-          if (res && res.ok) {
-            showToast("Запущена загрузка Spacewar в Steam!");
-          } else {
-            showToast("Не удалось запустить Steam: " + (res ? res.error : ""));
-          }
-        });
-      }
-    }
 
     function broadcastSteamHostInfo() {
       if (!currentRoom || currentRoom.hostId !== myId) return;
@@ -2515,17 +2642,17 @@
         // Auto-connect client to host via Steam P2P if in this room
         if (currentRoom && currentRoom.hostId === fromPeerId && fromPeerId !== myId) {
           const autoStatus = document.getElementById("steam-auto-status");
-          if (autoStatus) autoStatus.innerHTML = '<span class="status-dot warning"></span> <span>Авто-подключение...</span>';
+          if (autoStatus) autoStatus.innerHTML = '<span class="status-dot warning"></span> <span>Подключение...</span>';
           const port = data.port || 25565;
           if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
             window.pywebview.api.steam_api("/api/connect", { peer: data.steamId, remote_port: port, local_port: port, udp: false }).then(res => {
               if (res && res.ok) {
-                if (autoStatus) autoStatus.innerHTML = '<span class="status-dot online"></span> <span>Туннель активен</span>';
-                showToast(`Steam P2P подключен! 127.0.0.1:${port}`);
+                if (autoStatus) autoStatus.innerHTML = '<span class="status-dot online"></span> <span>Подключено</span>';
+                showToast(`Steam P2P: 127.0.0.1:${port}`);
                 const rttLbl = document.getElementById("steam-rtt-lbl");
-                if (rttLbl) rttLbl.textContent = "SDR: Соединено";
+                if (rttLbl) rttLbl.textContent = "Соединено";
               } else {
-                if (autoStatus) autoStatus.innerHTML = `<span class="status-dot warning"></span> <span>Ошибка подключения</span>`;
+                if (autoStatus) autoStatus.innerHTML = `<span class="status-dot warning"></span> <span>Ошибка</span>`;
               }
             });
           }
@@ -2542,7 +2669,7 @@
         window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" }).then(res => {
           if (res && res.ok) {
             broadcastSteamHostInfo();
-            showToast(`Порт ${port} применен в Steam P2P`);
+            showToast(`Порт ${port} применен`);
           } else {
             showToast(`Ошибка: ${res ? res.error : 'Steam недоступен'}`);
           }
@@ -2550,58 +2677,13 @@
       }
     }
 
-    function copyMySteamId() {
-      if (currentSteamState && currentSteamState.self_info) {
-        copyText(currentSteamState.self_info.steam_id);
-        showToast(`SteamID скопирован: ${currentSteamState.self_info.steam_id}`);
-      } else {
-        showToast("SteamID еще не получен");
-      }
-    }
 
-    function inviteSelectedSteamFriend() {
-      const sel = document.getElementById("steam-friends-select");
-      const friendId = sel ? sel.value : "";
-      if (!friendId) {
-        showToast("Выберите друга из списка!");
-        return;
-      }
-      const portInput = document.getElementById("steam-host-port-input");
-      const port = parseInt(portInput ? portInput.value : "") || 25565;
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
-        window.pywebview.api.steam_api("/api/invite", { peer: friendId, ports: [{ port: port, udp: false }] }).then(res => {
-          showToast("Инвайт отправлен другу через Steam!");
-        });
-      }
-    }
-
-    function connectToSteamHost() {
-      const targetInput = document.getElementById("steam-target-id-input");
-      const peerId = targetInput ? targetInput.value.trim() : "";
-      if (!peerId) {
-        showToast("Введите SteamID хоста!");
-        return;
-      }
-      const portInput = document.getElementById("steam-client-port-input");
-      const port = parseInt(portInput ? portInput.value : "") || (typeof activeGamePort !== 'undefined' && activeGamePort ? activeGamePort : 25565);
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
-        window.pywebview.api.steam_api("/api/connect", { peer: peerId, remote_port: port, local_port: port, udp: false }).then(res => {
-          if (res && res.ok) {
-            const addrSpan = document.getElementById("steam-client-addr");
-            if (addrSpan) addrSpan.textContent = `127.0.0.1:${port}`;
-            showToast(`Подключено к Steam SDR! Адрес для входа: 127.0.0.1:${port}`);
-          } else {
-            showToast(`Ошибка подключения: ${res ? res.error : 'неизвестно'}`);
-          }
-        });
-      }
-    }
 
     function copySteamGameAddr() {
       const addrEl = document.getElementById("steam-client-addr");
       const addr = addrEl ? addrEl.textContent : "127.0.0.1:25565";
       copyText(addr);
-      showToast(`Адрес ${addr} скопирован!`);
+      showToast(`Скопировано: ${addr}`);
     }
 
     function startTunnelTelemetry() {
@@ -2630,6 +2712,11 @@
       hasAnnouncedSteamHost = false;
       sendWS({ type: "leave_room" });
       stopTunnel();
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_stop) {
+        window.pywebview.api.steam_stop().catch(() => {});
+      } else {
+        fetch("http://127.0.0.1:8787/api/steam/stop", { method: "POST" }).catch(() => {});
+      }
       currentRoom = null;
       document.getElementById("chat-messages-container").innerHTML = "";
       updateRoomUI();
@@ -2656,10 +2743,6 @@
       copyText(myVirtualIp);
     }
 
-    function copyDirectAddr() {
-      const preset = GAME_PRESETS.find(p => p.id === (currentRoom ? currentRoom.gamePreset : "")) || GAME_PRESETS[0];
-      copyText(`10.42.0.1:${preset.port}`);
-    }
 
     function copyText(val) {
       if (!val) return;
@@ -2689,8 +2772,8 @@
     }
 
     function escapeHtml(text) {
-      if (!text) return "";
-      return text
+      if (text === null || text === undefined) return "";
+      return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

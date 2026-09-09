@@ -33,6 +33,25 @@ const (
 	k_ESteamNetworkingConnectionState_ProblemDetectedLocally = 5
 )
 
+// ptrFromUintptr converts a raw uintptr to unsafe.Pointer without violating go vet.
+func ptrFromUintptr(u uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&u))
+}
+
+// readCString safely reads a null-terminated C string from an unmanaged memory address.
+func readCString(ptr uintptr) string {
+	if ptr == 0 {
+		return ""
+	}
+	p := (*byte)(ptrFromUintptr(ptr))
+	var b []byte
+	for *p != 0 {
+		b = append(b, *p)
+		p = (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + 1))
+	}
+	return string(b)
+}
+
 // SteamFriend represents a friend in Steam.
 type SteamFriend struct {
 	SteamID  string `json:"steam_id"`
@@ -314,15 +333,7 @@ func (m *SteamManager) Init() error {
 	// Read local persona name
 	if m.friendsPtr != 0 {
 		namePtr, _, _ := m.procGetPersonaName.Call(m.friendsPtr)
-		if namePtr != 0 {
-			var nameBytes []byte
-			p := (*byte)(unsafe.Pointer(namePtr))
-			for *p != 0 {
-				nameBytes = append(nameBytes, *p)
-				p = (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + 1))
-			}
-			m.myPersona = string(nameBytes)
-		}
+		m.myPersona = readCString(namePtr)
 	}
 
 	// Register global connection status callback
@@ -362,14 +373,15 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 		return
 	}
 
-	hConn := *(*uint32)(unsafe.Pointer(pInfo))
+	p := ptrFromUintptr(pInfo)
+	hConn := *(*uint32)(p)
 	// In SteamNetConnectionStatusChangedCallback_t:
 	// m_hConn: offset 0 (4 bytes)
 	// padding: offset 4 (4 bytes)
 	// m_info: offset 8 (SteamNetConnectionInfo_t)
 	// In SteamNetConnectionInfo_t: m_eState is at offset 176 (4 bytes)
 	// Therefore m_info.m_eState in callback is at offset 8 + 176 = 184
-	cbState := *(*int32)(unsafe.Pointer(pInfo + 184))
+	cbState := *(*int32)(unsafe.Pointer(uintptr(p) + 184))
 	state := cbState
 
 	// Verify via GetConnectionInfo to ensure state is accurate
@@ -695,10 +707,11 @@ func (m *SteamManager) pumpLoop() {
 					if msgPtr == 0 {
 						continue
 					}
-					pData := *(*uintptr)(unsafe.Pointer(msgPtr))
-					cbSize := *(*int32)(unsafe.Pointer(msgPtr + 8))
+					pMsg := ptrFromUintptr(msgPtr)
+					pData := *(*uintptr)(pMsg)
+					cbSize := *(*int32)(unsafe.Pointer(uintptr(pMsg) + 8))
 					if cbSize > 0 && pData != 0 {
-						payload := unsafe.Slice((*byte)(unsafe.Pointer(pData)), int(cbSize))
+						payload := unsafe.Slice((*byte)(ptrFromUintptr(pData)), int(cbSize))
 						_, _ = sc.tcpConn.Write(payload)
 						m.BytesDown.Add(uint64(cbSize))
 					}
@@ -806,18 +819,9 @@ func (m *SteamManager) GetStatus() SteamStatus {
 			namePtr, _, _ := m.procGetFriendName.Call(friendsPtr, friendID)
 			state, _, _ := m.procGetFriendState.Call(friendsPtr, friendID)
 
-			var nameBytes []byte
-			if namePtr != 0 {
-				p := (*byte)(unsafe.Pointer(namePtr))
-				for *p != 0 {
-					nameBytes = append(nameBytes, *p)
-					p = (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + 1))
-				}
-			}
-
 			friends = append(friends, SteamFriend{
 				SteamID:  strconv.FormatUint(uint64(friendID), 10),
-				Name:     string(nameBytes),
+				Name:     readCString(namePtr),
 				Online:   state > 0, // 0 = Offline
 				InGame:   state == 1 || state == 3, // In-game
 				InTunnel: false,

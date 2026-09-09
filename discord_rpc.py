@@ -78,7 +78,7 @@ class DiscordRPC:
                 return True
         return False
 
-    def set_activity(self, details="В главном меню", state="P2P Gaming Hub v1.5.0", party_size=None, party_max=16, room_code=None, game_preset=None):
+    def set_activity(self, details="В главном меню", state="P2P Gaming Hub", party_size=None, party_max=16, room_code=None, game_preset=None):
         with self.lock:
             large_key = game_preset if game_preset else "app_icon"
             activity = {

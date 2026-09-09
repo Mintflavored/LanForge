@@ -90,4 +90,6 @@ type ServerMessage struct {
 	ServerTimestamp int64             `json:"serverTimestamp,omitempty"`
 	StunProbes      []StunProbeResult `json:"stunProbes,omitempty"`
 	Port            int               `json:"port,omitempty"`
+	Game            interface{}       `json:"game,omitempty"`
+	Nat             interface{}       `json:"nat,omitempty"`
 }

@@ -8,9 +8,10 @@ from PIL import Image
 import pystray
 
 class TrayManager:
-    def __init__(self, icon_path, app_name="LANForge", on_show=None, on_quit=None):
+    def __init__(self, icon_path, app_name="LANForge", version=None, on_show=None, on_quit=None):
         self.icon_path = icon_path
         self.app_name = app_name
+        self.version = version
         self.on_show = on_show
         self.on_quit = on_quit
         self.tray = None
@@ -19,8 +20,9 @@ class TrayManager:
         self._thread = None
 
     def _create_menu(self):
+        title = f"{self.app_name} (v{self.version})" if self.version else self.app_name
         return pystray.Menu(
-            pystray.MenuItem(f"{self.app_name} (v1.5.0)", None, enabled=False),
+            pystray.MenuItem(title, None, enabled=False),
             pystray.MenuItem(lambda text: f"Статус: {self.status_text}", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Показать окно", self._action_show, default=True),

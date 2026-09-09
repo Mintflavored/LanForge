@@ -313,3 +313,17 @@ func (m *RoomManager) ActivePeersCount() int {
 	defer m.mu.RUnlock()
 	return len(m.peers)
 }
+
+// BroadcastAll sends a message to all connected peers.
+func (m *RoomManager) BroadcastAll(msg protocol.ServerMessage) {
+	m.mu.RLock()
+	peers := make([]*ConnectedPeer, 0, len(m.peers))
+	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	m.mu.RUnlock()
+
+	for _, p := range peers {
+		_ = p.SendJSON(msg)
+	}
+}

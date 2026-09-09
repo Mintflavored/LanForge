@@ -12,26 +12,32 @@ import (
 type DiscoveredGame struct {
 	ID         string `json:"id"`
 	GameName   string `json:"gameName"`
+	Name       string `json:"name"`
 	HostNick   string `json:"hostNick"`
 	HostIP     string `json:"hostIp"`
+	IP         string `json:"ip"`
 	Port       int    `json:"port"`
+	Protocol   string `json:"protocol"`
 	DetectedAt int64  `json:"detectedAt"`
 	Motd       string `json:"motd"`
+	Extra      string `json:"extra"`
 }
 
 // RelayManager listens to LAN broadcast packets across all active physical interfaces.
 type RelayManager struct {
-	listeners []chan DiscoveredGame
-	running   bool
-	mu        sync.Mutex
-	stopChan  chan struct{}
+	listeners   []chan DiscoveredGame
+	recentGames map[string]DiscoveredGame
+	running     bool
+	mu          sync.Mutex
+	stopChan    chan struct{}
 }
 
 // NewRelayManager creates a new RelayManager.
 func NewRelayManager() *RelayManager {
 	return &RelayManager{
-		listeners: make([]chan DiscoveredGame, 0),
-		stopChan:  make(chan struct{}),
+		listeners:   make([]chan DiscoveredGame, 0),
+		recentGames: make(map[string]DiscoveredGame),
+		stopChan:    make(chan struct{}),
 	}
 }
 
@@ -42,6 +48,22 @@ func (r *RelayManager) Subscribe() chan DiscoveredGame {
 	ch := make(chan DiscoveredGame, 10)
 	r.listeners = append(r.listeners, ch)
 	return ch
+}
+
+// GetActiveGames returns currently detected games within 30 seconds TTL.
+func (r *RelayManager) GetActiveGames() []DiscoveredGame {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now().UnixMilli()
+	games := make([]DiscoveredGame, 0, len(r.recentGames))
+	for id, g := range r.recentGames {
+		if now-g.DetectedAt < 30000 {
+			games = append(games, g)
+		} else {
+			delete(r.recentGames, id)
+		}
+	}
+	return games
 }
 
 // Start begins listening to UDP broadcast packets across all physical network adapters.
@@ -61,21 +83,39 @@ func (r *RelayManager) Start() {
 	go r.listenMulticast("224.0.2.60:4445")
 }
 
-// Stop stops the broadcast listeners.
+// Unsubscribe removes a channel from listeners.
+func (r *RelayManager) Unsubscribe(ch chan DiscoveredGame) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, c := range r.listeners {
+		if c == ch {
+			r.listeners = append(r.listeners[:i], r.listeners[i+1:]...)
+			break
+		}
+	}
+}
+
+// Stop stops the broadcast listeners and closes active listener channels.
 func (r *RelayManager) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.running {
-		return
+	if r.running {
+		r.running = false
+		close(r.stopChan)
 	}
-	r.running = false
-	close(r.stopChan)
+	for _, ch := range r.listeners {
+		close(ch)
+	}
+	r.listeners = nil
 }
 
 func (r *RelayManager) emit(game DiscoveredGame) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, ch := range r.listeners {
+	r.recentGames[game.ID] = game
+	listeners := append([]chan DiscoveredGame(nil), r.listeners...)
+	r.mu.Unlock()
+
+	for _, ch := range listeners {
 		select {
 		case ch <- game:
 		default:
@@ -160,7 +200,10 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 			adStart := strings.Index(text, "[AD]") + 4
 			adEnd := strings.Index(text, "[/AD]")
 			if adEnd > adStart {
-				_, _ = fmt.Sscanf(text[adStart:adEnd], "%d", &port)
+				var p int
+				if n, _ := fmt.Sscanf(text[adStart:adEnd], "%d", &p); n == 1 && p > 0 && p <= 65535 {
+					port = p
+				}
 			}
 		}
 
@@ -172,11 +215,15 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 		r.emit(DiscoveredGame{
 			ID:         fmt.Sprintf("mc_%d", port),
 			GameName:   "Minecraft LAN World",
+			Name:       fmt.Sprintf("Minecraft (%s)", motd),
 			HostNick:   "Local Host",
 			HostIP:     hostIP,
+			IP:         hostIP,
 			Port:       port,
+			Protocol:   "LAN",
 			DetectedAt: time.Now().UnixMilli(),
 			Motd:       motd,
+			Extra:      motd,
 		})
 	}
 }

@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/lanforge/lanforge/pkg/broadcast"
 	"github.com/lanforge/lanforge/pkg/protocol"
 	"github.com/lanforge/lanforge/pkg/stun"
 	"github.com/lanforge/lanforge/pkg/tunnel"
+	"github.com/lanforge/lanforge/pkg/upnp"
 )
 
 var upgrader = websocket.Upgrader{
@@ -26,6 +28,7 @@ type Server struct {
 	Port         int
 	activeTunnel *tunnel.TunnelEngine
 	tunnelMu     sync.Mutex
+	relay        *broadcast.RelayManager
 }
 
 // NewServer creates a new signaling server.
@@ -33,6 +36,7 @@ func NewServer(port int) *Server {
 	return &Server{
 		Manager: NewRoomManager(),
 		Port:    port,
+		relay:   broadcast.NewRelayManager(),
 	}
 }
 
@@ -61,10 +65,19 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		probes := stun.ProbeAllStunServers()
+		nat := stun.DetectNat()
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":     "ok",
 			"stunProbes": probes,
+			"nat":        nat,
 		})
+	})
+
+	mux.HandleFunc("/api/nat", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		res := stun.DetectNat()
+		_ = json.NewEncoder(w).Encode(res)
 	})
 
 	mux.HandleFunc("/api/tunnel/start", func(w http.ResponseWriter, r *http.Request) {
@@ -347,6 +360,66 @@ func (s *Server) Handler() http.Handler {
 		})
 	})
 
+	// LAN Radar Active Games Endpoint
+	mux.HandleFunc("/api/radar/games", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		games := s.relay.GetActiveGames()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+			"games":  games,
+		})
+	})
+
+	// UPnP Status Endpoint
+	mux.HandleFunc("/api/upnp/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		gw, err := upnp.DiscoverGateway(1000 * time.Millisecond)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"available": false,
+				"error":     err.Error(),
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"available":   true,
+			"routerIp":    gw.RouterIP,
+			"localIp":     gw.LocalIP,
+			"serviceType": gw.ServiceType,
+		})
+	})
+
+	// UPnP Port Mapping Endpoint
+	mux.HandleFunc("/api/upnp/map", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		var req struct {
+			Port     int    `json:"port"`
+			Protocol string `json:"protocol"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Port <= 0 {
+			req.Port = 25565
+		}
+
+		success := upnp.MapPort(req.Port, req.Protocol)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":       success,
+			"port":     req.Port,
+			"protocol": req.Protocol,
+		})
+	})
+
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/", s.handleWebSocket)
 
@@ -357,6 +430,19 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("0.0.0.0:%d", s.Port)
 	fmt.Printf("[LANForge Server] Listening on ws://%s\n", addr)
+
+	// Start LAN game broadcast sniffer (for LAN Radar)
+	s.relay.Start()
+	go func() {
+		ch := s.relay.Subscribe()
+		for game := range ch {
+			s.Manager.BroadcastAll(protocol.ServerMessage{
+				Type: "discovered_game",
+				Game: game,
+			})
+		}
+	}()
+
 	return http.ListenAndServe(addr, s.Handler())
 }
 
@@ -533,9 +619,11 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 	case "probe_stun":
 		go func() {
 			probes := stun.ProbeAllStunServers()
+			nat := stun.DetectNat()
 			_ = peer.SendJSON(protocol.ServerMessage{
 				Type:       "stun_probes_result",
 				StunProbes: probes,
+				Nat:        nat,
 			})
 		}()
 
