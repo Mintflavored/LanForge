@@ -128,6 +128,7 @@ type SteamManager struct {
 	procSetSteamID64     *syscall.LazyProc
 	procClearIdent       *syscall.LazyProc
 	procSetGlobalInt32   *syscall.LazyProc
+	procSetGlobalString  *syscall.LazyProc
 	procSetConnInt32     *syscall.LazyProc
 
 	initMu      sync.Mutex
@@ -207,6 +208,7 @@ func newSteamManager() *SteamManager {
 		procSetSteamID64:     dll.NewProc("SteamAPI_SteamNetworkingIdentity_SetSteamID64"),
 		procClearIdent:       dll.NewProc("SteamAPI_SteamNetworkingIdentity_Clear"),
 		procSetGlobalInt32:   dll.NewProc("SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueInt32"),
+		procSetGlobalString:  dll.NewProc("SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueString"),
 		procSetConnInt32:     dll.NewProc("SteamAPI_ISteamNetworkingUtils_SetConnectionConfigValueInt32"),
 		activeConns:          make(map[uint32]*steamConn),
 		stopPump:             make(chan struct{}),
@@ -292,6 +294,16 @@ func (m *SteamManager) Init() error {
 	m.procSetGlobalInt32.Call(m.utilsPtr, 47, 32*1024*1024)
 	// Config #11: SendRateMax -> 100 MB/s
 	m.procSetGlobalInt32.Call(m.utilsPtr, 11, 100*1024*1024)
+	// Config #12: NagleTime -> 0 (instant packet transmission without 5ms batch delay)
+	m.procSetGlobalInt32.Call(m.utilsPtr, 12, 0)
+	// Config #104: P2P_Transport_ICE_Enable -> 1 (enable direct UDP hole punching when possible)
+	m.procSetGlobalInt32.Call(m.utilsPtr, 104, 1)
+	// Config #103: P2P_STUN_ServerList -> fast public STUN servers for direct NAT traversal
+	stunServers := []byte("stun.l.google.com:19302,stun1.l.google.com:19302,stun.cloudflare.com:3478\x00")
+	m.procSetGlobalString.Call(m.utilsPtr, 103, uintptr(unsafe.Pointer(&stunServers[0])))
+
+	// Optimize Windows timer interrupt frequency to 1ms (eliminates 15.6ms scheduler lag)
+	initSystemTimerResolution()
 
 	// Read local SteamID
 	if m.userPtr != 0 {
@@ -395,10 +407,11 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 			}
 			log.Printf("[Steam P2P Host] Accepted peer connection #%d successfully!", hConn)
 
-			// Configure 32MB connection buffers for heavy gaming traffic
+			// Configure 32MB connection buffers and zero nagle delay
 			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 9, 32*1024*1024)
 			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 47, 32*1024*1024)
 			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 11, 100*1024*1024)
+			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 12, 0)
 
 			// Connect to local Minecraft server
 			localAddr := fmt.Sprintf("127.0.0.1:%d", gamePort)
@@ -407,6 +420,11 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 				log.Printf("[Steam P2P Host] Failed to dial local game on %s: %v", localAddr, err)
 				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
 				return
+			}
+			if tc, ok := tcpConn.(*net.TCPConn); ok {
+				_ = tc.SetNoDelay(true)
+				_ = tc.SetReadBuffer(128 * 1024)
+				_ = tc.SetWriteBuffer(128 * 1024)
 			}
 
 			sc := &steamConn{hConn: hConn, tcpConn: tcpConn}
@@ -520,10 +538,17 @@ func (m *SteamManager) StartClient(hostSteamID uint64, localPort int) (int, erro
 				continue
 			}
 
-			// Configure 32MB connection buffers for heavy gaming traffic
+			if tc, ok := tcpConn.(*net.TCPConn); ok {
+				_ = tc.SetNoDelay(true)
+				_ = tc.SetReadBuffer(128 * 1024)
+				_ = tc.SetWriteBuffer(128 * 1024)
+			}
+
+			// Configure 32MB connection buffers and zero nagle delay
 			m.procSetConnInt32.Call(m.utilsPtr, hConn, 9, 32*1024*1024)
 			m.procSetConnInt32.Call(m.utilsPtr, hConn, 47, 32*1024*1024)
 			m.procSetConnInt32.Call(m.utilsPtr, hConn, 11, 100*1024*1024)
+			m.procSetConnInt32.Call(m.utilsPtr, hConn, 12, 0)
 
 			sc := &steamConn{hConn: uint32(hConn), tcpConn: tcpConn}
 			m.connsMu.Lock()
@@ -817,4 +842,12 @@ func (m *SteamManager) InviteFriend(targetSteamID uint64, connectString string) 
 
 	r, _, _ := m.procInviteUser.Call(m.friendsPtr, uintptr(targetSteamID), uintptr(unsafe.Pointer(cstr)))
 	return r != 0
+}
+
+func initSystemTimerResolution() {
+	winmm := syscall.NewLazyDLL("winmm.dll")
+	proc := winmm.NewProc("timeBeginPeriod")
+	if proc.Find() == nil {
+		proc.Call(1)
+	}
 }
