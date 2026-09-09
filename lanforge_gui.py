@@ -202,6 +202,9 @@ def save_user_config(data):
 class JsApi:
     """JS Bridge allowing UI to interact with Windows Native features, persistent config & logs."""
 
+    def get_app_version(self):
+        return __version__
+
     def log(self, level, tag, message):
         lvl = str(level).lower()
         text = f"[{tag}] {message}"
@@ -377,7 +380,7 @@ def main():
     api = JsApi()
 
     main_window = webview.create_window(
-        title="LANForge",
+        title=f"LANForge v{__version__}",
         url=html_path,
         js_api=api,
         width=1040,
