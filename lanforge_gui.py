@@ -1,5 +1,5 @@
 r"""
-LANForge Desktop Launcher (v2.0.1)
+LANForge Desktop Launcher (v2.0.2)
 Single-process Desktop wrapper around LANForge Web UI & Local Server.
 Features:
 - Spawns local signaling/game server (Go binary)
@@ -9,7 +9,7 @@ Features:
 - Cross-platform support
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 import os
 import sys
