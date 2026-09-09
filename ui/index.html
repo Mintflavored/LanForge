@@ -1113,7 +1113,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v1.8.1</span>
+          <span style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.0.0</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -2291,12 +2291,18 @@
           if (prevClientVal) clientFriendsSelect.value = prevClientVal;
         }
 
-        if (res.state.connections && res.state.connections.length > 0) {
-          const conn = res.state.connections[0];
-          const rttLbl = document.getElementById("steam-rtt-lbl");
-          if (rttLbl && conn.ping_ms >= 0) {
-            rttLbl.textContent = `SDR Ping: ${conn.ping_ms} ms`;
+        const rttLbl = document.getElementById("steam-rtt-lbl");
+        if (rttLbl) {
+          if (res.state.ping !== undefined && res.state.ping >= 0) {
+            rttLbl.textContent = `SDR Ping: ${res.state.ping} ms`;
+          } else if (res.state.connections && res.state.connections.length > 0 && res.state.connections[0].ping_ms >= 0) {
+            rttLbl.textContent = `SDR Ping: ${res.state.connections[0].ping_ms} ms`;
           }
+        }
+
+        if (res.state.clientActive && res.state.clientPort) {
+          const addrEl = document.getElementById("steam-client-addr");
+          if (addrEl) addrEl.textContent = `127.0.0.1:${res.state.clientPort}`;
         }
       }
     }

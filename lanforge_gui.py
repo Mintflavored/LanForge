@@ -1,15 +1,15 @@
 r"""
-LANForge Desktop Launcher (v1.8.1)
-- Discord Rich Presence (RPC) Integration
-- Windows System Tray & Native Toast Notifications
-- DirectX 11/12 GPU composition, zero-proxy loopback bypass, Clash Verge & VPN-safe
-- Hybrid Cloud & Local Signaling support
-- Unified Rotating File Logger (%APPDATA%\LANForge\lanforge.log)
-- Zero-Driver P2P Game Data Tunnel with auto-reconnect & session recovery
-- Steamworks Valve SDR P2P Tunneling (Spacewar AppID 480)
+LANForge Desktop Launcher (v2.0.0)
+Single-process Desktop wrapper around LANForge Web UI & Local Server.
+Features:
+- Spawns local signaling/game server (Go binary)
+- Native Steam P2P (Valve SDR) networking
+- pywebview GUI with modern frameless dark UI
+- System Tray integration with IP copy and room actions
+- Cross-platform support
 """
 
-__version__ = "1.8.1"
+__version__ = "2.0.0"
 
 import os
 import sys
@@ -170,125 +170,13 @@ def stop_backend_server():
 
 atexit.register(stop_backend_server)
 
-steam_tunnel_proc = None
-
+# Steam detection
 def is_steam_running():
     try:
         out = subprocess.check_output('tasklist /FI "IMAGENAME eq steam.exe"', shell=True).decode("cp866", errors="ignore")
         return "steam.exe" in out.lower()
     except Exception:
         return False
-
-def find_steam_tunnel_bin():
-    candidates = []
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        candidates.append(os.path.join(sys._MEIPASS, "bin", "steam-tunnel", "steam-tunnel.exe"))
-        candidates.append(os.path.join(sys._MEIPASS, "steam-tunnel", "steam-tunnel.exe"))
-        candidates.append(os.path.join(sys._MEIPASS, "steam-tunnel.exe"))
-    candidates.extend([
-        os.path.join(exe_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
-        os.path.join(exe_dir, "steam-tunnel", "steam-tunnel.exe"),
-        os.path.join(exe_dir, "steam-tunnel.exe"),
-        os.path.join(base_dir, "bin", "steam-tunnel", "steam-tunnel.exe"),
-        os.path.join(base_dir, "steam-tunnel", "steam-tunnel.exe"),
-        os.path.join(base_dir, "steam-tunnel.exe")
-    ])
-    for cand in candidates:
-        if cand and os.path.exists(cand):
-            return cand
-
-    # Recursive fallback search in frozen directory
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        try:
-            for root, _, files in os.walk(sys._MEIPASS):
-                if "steam-tunnel.exe" in files:
-                    return os.path.join(root, "steam-tunnel.exe")
-        except Exception:
-            pass
-
-    # Recursive fallback search in exe_dir and base_dir
-    try:
-        for search_dir in (exe_dir, base_dir):
-            if os.path.exists(search_dir):
-                for root, _, files in os.walk(search_dir):
-                    if "steam-tunnel.exe" in files:
-                        return os.path.join(root, "steam-tunnel.exe")
-    except Exception:
-        pass
-
-    return None
-
-def start_steam_tunnel():
-    global steam_tunnel_proc
-    if is_port_open("127.0.0.1", 7788):
-        logger.info("Steam tunnel already active on 127.0.0.1:7788")
-        return True
-
-    bin_path = find_steam_tunnel_bin()
-    if not bin_path:
-        logger.warning("steam-tunnel.exe binary not found in candidates.")
-        return False
-
-    try:
-        tunnel_dir = os.path.dirname(bin_path)
-        # Ensure steam_appid.txt exists with AppID 480 (Spacewar)
-        appid_file = os.path.join(tunnel_dir, "steam_appid.txt")
-        if not os.path.exists(appid_file):
-            try:
-                with open(appid_file, "w", encoding="utf-8") as f:
-                    f.write("480\n")
-            except Exception as e:
-                logger.warning(f"Could not create steam_appid.txt: {e}")
-
-        logger.info(f"Spawning Steam P2P bridge binary: {bin_path} (cwd: {tunnel_dir})")
-        creation_flags = 0x08000000 if sys.platform == "win32" else 0
-        steam_tunnel_proc = subprocess.Popen(
-            [bin_path],
-            cwd=tunnel_dir,
-            creationflags=creation_flags,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-
-        def pipe_steam_stream(stream, is_err=False):
-            try:
-                for line in iter(stream.readline, b''):
-                    msg = line.decode('utf-8', errors='ignore').strip()
-                    if msg:
-                        if is_err:
-                            logger.error(f"[SteamTunnel] {msg}")
-                        else:
-                            logger.info(f"[SteamTunnel] {msg}")
-            except Exception:
-                pass
-
-        threading.Thread(target=pipe_steam_stream, args=(steam_tunnel_proc.stdout, False), daemon=True).start()
-        threading.Thread(target=pipe_steam_stream, args=(steam_tunnel_proc.stderr, True), daemon=True).start()
-
-        for _ in range(30):
-            time.sleep(0.1)
-            if is_port_open("127.0.0.1", 7788):
-                logger.info("Steam P2P bridge successfully listening on 127.0.0.1:7788")
-                return True
-    except Exception as e:
-        logger.error(f"[Steam Tunnel Spawn Error] {e}")
-    return False
-
-def stop_steam_tunnel():
-    global steam_tunnel_proc
-    if steam_tunnel_proc:
-        try:
-            logger.info("Terminating Steam tunnel...")
-            steam_tunnel_proc.terminate()
-            steam_tunnel_proc.wait(timeout=1.0)
-        except Exception:
-            try:
-                steam_tunnel_proc.kill()
-            except Exception:
-                pass
-        steam_tunnel_proc = None
-
-atexit.register(stop_steam_tunnel)
 
 def load_user_config():
     try:
@@ -379,18 +267,16 @@ class JsApi:
 
     def steam_get_status(self):
         steam_running = is_steam_running()
-        tunnel_active = is_port_open("127.0.0.1", 7788)
+        tunnel_active = False
         state_data = None
-        if tunnel_active:
-            try:
-                req = urllib.request.Request(
-                    "http://127.0.0.1:7788/api/state",
-                    headers={"X-ST": "1", "Host": "127.0.0.1:7788"}
-                )
-                with urllib.request.urlopen(req, timeout=1.5) as resp:
-                    state_data = json.loads(resp.read().decode("utf-8"))
-            except Exception as e:
-                logger.debug(f"[Steam State Error] {e}")
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8787/api/steam/status")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                tunnel_active = data.get("hosting", False) or data.get("clientActive", False) or data.get("initialized", False)
+                state_data = data
+        except Exception as e:
+            logger.debug(f"[Steam Status Error] {e}")
         return {
             "steamRunning": steam_running,
             "tunnelActive": tunnel_active,
@@ -400,32 +286,55 @@ class JsApi:
     def steam_start(self):
         if not is_steam_running():
             return {"ok": False, "error": "Steam не запущен на компьютере"}
-        ok = start_steam_tunnel()
-        return {"ok": ok}
-
-    def steam_stop(self):
-        stop_steam_tunnel()
-        return {"ok": True}
-
-    def steam_api(self, endpoint, payload=None):
         try:
-            url = f"http://127.0.0.1:7788{endpoint}"
-            headers = {"X-ST": "1", "Host": "127.0.0.1:7788", "Content-Type": "application/json"}
-            data = json.dumps(payload or {}).encode("utf-8") if payload is not None else None
-            req = urllib.request.Request(url, data=data, headers=headers)
+            req = urllib.request.Request(
+                "http://127.0.0.1:8787/api/steam/start",
+                data=b"{}",
+                headers={"Content-Type": "application/json"}
+            )
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    def steam_install_spacewar(self):
+    def steam_stop(self):
         try:
-            os.startfile("steam://install/480")
-            logger.info("Triggered native Steam Spacewar (AppID 480) installation")
-            return {"ok": True}
+            req = urllib.request.Request(
+                "http://127.0.0.1:8787/api/steam/stop",
+                data=b"{}",
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                return json.loads(resp.read().decode("utf-8"))
         except Exception as e:
-            logger.error(f"Failed to trigger Steam install: {e}")
             return {"ok": False, "error": str(e)}
+
+    def steam_api(self, endpoint, payload=None):
+        try:
+            ep = endpoint
+            if ep == "/api/share":
+                ep = "/api/steam/host"
+            elif ep == "/api/connect":
+                ep = "/api/steam/connect"
+            elif ep == "/api/invite":
+                ep = "/api/steam/invite"
+            elif ep == "/api/state":
+                ep = "/api/steam/status"
+            elif not ep.startswith("/api/steam/"):
+                ep = f"/api/steam{ep}"
+
+            url = f"http://127.0.0.1:8787{ep}"
+            headers = {"Content-Type": "application/json"}
+            data = json.dumps(payload or {}).encode("utf-8") if payload is not None else b"{}"
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def steam_install_spacewar(self):
+        # Spacewar installation is no longer needed with native Steamworks SDR!
+        return {"ok": True}
 
 def on_show_window():
     global main_window

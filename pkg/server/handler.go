@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -159,6 +160,190 @@ func (s *Server) Handler() http.Handler {
 			"listenPort": s.activeTunnel.GetListenPort(),
 			"bytesUp":    s.activeTunnel.BytesUp.Load(),
 			"bytesDown":  s.activeTunnel.BytesDown.Load(),
+		})
+	})
+
+	// Native Steam P2P (Valve SDR) API Endpoints
+	mux.HandleFunc("/api/steam/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		mgr := tunnel.GetSteamManager()
+		st := mgr.GetStatus()
+		_ = json.NewEncoder(w).Encode(st)
+	})
+
+	mux.HandleFunc("/api/steam/start", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		mgr := tunnel.GetSteamManager()
+		if err := mgr.Init(); err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": err.Error(),
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok": true,
+		})
+	})
+
+	mux.HandleFunc("/api/steam/host", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		var req struct {
+			Port int `json:"port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Port <= 0 {
+			req.Port = 25565
+		}
+
+		mgr := tunnel.GetSteamManager()
+		if err := mgr.StartHost(req.Port); err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": err.Error(),
+			})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":   true,
+			"port": req.Port,
+		})
+	})
+
+	mux.HandleFunc("/api/steam/connect", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		var req struct {
+			HostSteamID string `json:"hostSteamId"`
+			Peer        string `json:"peer"`
+			LocalPort   int    `json:"localPort"`
+			RemotePort  int    `json:"remote_port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		targetIDStr := req.HostSteamID
+		if targetIDStr == "" {
+			targetIDStr = req.Peer
+		}
+		targetID, err := strconv.ParseUint(targetIDStr, 10, 64)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": "invalid steam ID",
+			})
+			return
+		}
+
+		localPort := req.LocalPort
+		if localPort <= 0 {
+			localPort = req.RemotePort
+		}
+		if localPort <= 0 {
+			localPort = 25565
+		}
+
+		mgr := tunnel.GetSteamManager()
+		actualPort, err := mgr.StartClient(targetID, localPort)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": err.Error(),
+			})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":           true,
+			"listenPort":   actualPort,
+			"targetHostId": targetIDStr,
+		})
+	})
+
+	mux.HandleFunc("/api/steam/stop", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		mgr := tunnel.GetSteamManager()
+		mgr.Stop()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok": true,
+		})
+	})
+
+	mux.HandleFunc("/api/steam/invite", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == http.MethodOptions {
+			return
+		}
+
+		var req struct {
+			SteamID string `json:"steamId"`
+			Peer    string `json:"peer"`
+			Port    int    `json:"port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		idStr := req.SteamID
+		if idStr == "" {
+			idStr = req.Peer
+		}
+		targetID, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": "invalid steam ID",
+			})
+			return
+		}
+
+		port := req.Port
+		if port <= 0 {
+			port = 25565
+		}
+
+		mgr := tunnel.GetSteamManager()
+		ok := mgr.InviteFriend(targetID, fmt.Sprintf("+connect_port %d", port))
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok": ok,
 		})
 	})
 
