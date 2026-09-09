@@ -380,7 +380,7 @@ def main():
     api = JsApi()
 
     main_window = webview.create_window(
-        title=f"LANForge v{__version__}",
+        title="LANForge",
         url=html_path,
         js_api=api,
         width=1040,
