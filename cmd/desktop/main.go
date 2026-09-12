@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 	"github.com/lanforge/lanforge/pkg/discord"
 	"github.com/lanforge/lanforge/pkg/server"
 	"golang.org/x/sys/windows"
+
 )
 
 //go:embed ui/index.html
@@ -33,7 +35,7 @@ var embeddedHTML []byte
 var embeddedSteamDLL []byte
 
 var (
-	appVersion = "2.3.0"
+	appVersion = "2.3.1"
 
 	psapi               = syscall.NewLazyDLL("psapi.dll")
 	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
@@ -61,7 +63,13 @@ func init() {
 	if fi, err := os.Stat(dllTarget); os.IsNotExist(err) || fi.Size() == 0 {
 		_ = os.WriteFile(dllTarget, embeddedSteamDLL, 0755)
 	}
+
+	// Направляем standard library log в lanforge.log для сохранения диагностики Steam P2P и туннелей
+	if lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		log.SetOutput(io.MultiWriter(os.Stderr, lf))
+	}
 }
+
 
 func logMessage(level, tag, message string) {
 	logMu.Lock()
@@ -143,7 +151,9 @@ func main() {
 
 	// 3. Запуск in-process сервера LANForge на порту 8787
 	srv := server.NewServer(8787)
+	srv.StartRelay()
 	srvHandler := srv.Handler()
+
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -272,13 +282,39 @@ func main() {
 	w.Bind("goSteamGetStatus", func() string {
 		resp, err := http.Get("http://127.0.0.1:8787/api/steam/status")
 		if err != nil {
-			res, _ := json.Marshal(map[string]interface{}{"steamRunning": false, "tunnelActive": false})
+			res, _ := json.Marshal(map[string]interface{}{
+				"steamRunning": false,
+				"tunnelActive": false,
+				"state":        nil,
+			})
 			return string(res)
 		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		return string(body)
+		var data map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			res, _ := json.Marshal(map[string]interface{}{
+				"steamRunning": false,
+				"tunnelActive": false,
+				"state":        nil,
+			})
+			return string(res)
+		}
+
+		steamRunning, _ := data["steamRunning"].(bool)
+		initialized, _ := data["initialized"].(bool)
+		hosting, _ := data["hosting"].(bool)
+		clientActive, _ := data["clientActive"].(bool)
+		tunnelActive := initialized || hosting || clientActive
+
+		wrapper := map[string]interface{}{
+			"steamRunning": steamRunning,
+			"tunnelActive": tunnelActive,
+			"state":        data,
+		}
+		res, _ := json.Marshal(wrapper)
+		return string(res)
 	})
+
 
 	w.Bind("goSteamStart", func() string {
 		resp, err := http.Post("http://127.0.0.1:8787/api/steam/start", "application/json", bytes.NewReader([]byte("{}")))

@@ -1270,7 +1270,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.3.0</span>
+          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.3.1</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1655,7 +1655,8 @@
           showToast(msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
           notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
           if (currentRoom && currentRoom.hostId === myId) {
-            setTimeout(broadcastSteamHostInfo, 600);
+            refreshSteamStatus();
+            setTimeout(broadcastSteamHostInfo, 800);
           }
           break;
 
@@ -1670,9 +1671,11 @@
             showToast(`Игрок ${msg.peer.nick} подключился`);
             notifyNative("LANForge", `Игрок ${msg.peer.nick} подключился`);
             if (currentRoom && currentRoom.hostId === myId) {
-              setTimeout(broadcastSteamHostInfo, 600);
+              refreshSteamStatus();
+              setTimeout(broadcastSteamHostInfo, 800);
             }
           }
+
           break;
 
         case "peer_left":
@@ -1774,8 +1777,29 @@
             renderRadarGames();
             showToast("Обнаружен LAN-мир: " + msg.game.name);
             notifyNative("LAN Радар", "Обнаружен мир: " + msg.game.name);
+
+            // Если я являюсь хостом комнаты, автоматически обновить порт игры на обнаруженный!
+            if (currentRoom && currentRoom.hostId === myId && msg.game.port) {
+              const hostInput = document.getElementById("host-game-port-input");
+              const steamInput = document.getElementById("steam-host-port-input");
+              let changed = false;
+              if (hostInput && parseInt(hostInput.value) !== msg.game.port) {
+                hostInput.value = msg.game.port;
+                applyHostGamePort();
+                changed = true;
+              }
+              if (steamInput && parseInt(steamInput.value) !== msg.game.port) {
+                steamInput.value = msg.game.port;
+                sharePortOnSteam();
+                changed = true;
+              }
+              if (changed) {
+                showToast(`Порт игры обновлен: ${msg.game.port}`);
+              }
+            }
           }
           break;
+
 
         case "error":
           showToast("Ошибка: " + (msg.errorMessage || msg.code || "Неизвестная ошибка"));
@@ -2579,7 +2603,6 @@
       if (!res) return;
       const warningBox = document.getElementById("steam-warning-box");
       const selfNameLbl = document.getElementById("steam-self-name");
-      const friendsSelect = document.getElementById("steam-friends-select");
 
       if (!res.steamRunning) {
         if (warningBox) warningBox.style.display = "block";
@@ -2589,17 +2612,20 @@
 
       if (warningBox) warningBox.style.display = "none";
 
-      if (!res.tunnelActive) {
+      const state = res.state || res;
+      const isTunnelActive = res.tunnelActive || res.initialized || (state && (state.initialized || state.hosting || state.clientActive));
+
+      if (!isTunnelActive) {
         if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_start) {
           window.pywebview.api.steam_start();
         }
         return;
       }
 
-      if (res.state) {
-        currentSteamState = res.state;
-        if (res.state.self_info && selfNameLbl) {
-          selfNameLbl.textContent = `${res.state.self_info.name} (${res.state.self_info.steam_id})`;
+      if (state) {
+        currentSteamState = state;
+        if (state.self_info && selfNameLbl) {
+          selfNameLbl.textContent = `${state.self_info.name} (${state.self_info.steam_id})`;
           if (currentRoom && currentRoom.hostId === myId && !hasAnnouncedSteamHost) {
             hasAnnouncedSteamHost = true;
             broadcastSteamHostInfo();
@@ -2607,19 +2633,23 @@
         }
 
         let steamPing = -1;
-        if (res.state.ping !== undefined && res.state.ping >= 0) {
-          steamPing = res.state.ping;
-        } else if (res.state.connections && res.state.connections.length > 0 && res.state.connections[0].ping_ms >= 0) {
-          steamPing = res.state.connections[0].ping_ms;
+        if (state.ping !== undefined && state.ping >= 0) {
+          steamPing = state.ping;
+        } else if (state.connections && state.connections.length > 0 && state.connections[0].ping_ms >= 0) {
+          steamPing = state.connections[0].ping_ms;
         }
 
+        const steamPingEl = document.getElementById("steam-ping-val");
+        if (steamPingEl) {
+          steamPingEl.textContent = steamPing >= 0 ? `${steamPing} мс` : "-- мс";
+        }
         if (currentServerMode === "steam" && steamPing >= 0) {
           recordPingSample(steamPing);
         }
 
-        if (res.state.clientActive && res.state.clientPort) {
+        if (state.clientActive && state.clientPort) {
           const addrEl = document.getElementById("steam-client-addr");
-          if (addrEl) addrEl.textContent = `127.0.0.1:${res.state.clientPort}`;
+          if (addrEl) addrEl.textContent = `127.0.0.1:${state.clientPort}`;
         }
       }
     }
@@ -2628,17 +2658,21 @@
 
     function broadcastSteamHostInfo() {
       if (!currentRoom || currentRoom.hostId !== myId) return;
-      if (currentSteamState && currentSteamState.self_info && currentSteamState.self_info.steam_id) {
-        const portInput = document.getElementById("steam-host-port-input");
-        const port = parseInt(portInput ? portInput.value : "") || activeGamePort || 25565;
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
-          window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" });
-        }
-        sendWS({
-          type: "chat_message",
-          text: "::STEAM_ANNOUNCE::" + JSON.stringify({ steamId: currentSteamState.self_info.steam_id, port: port })
-        });
+      if (!currentSteamState || !currentSteamState.self_info || !currentSteamState.self_info.steam_id) {
+        refreshSteamStatus();
+        setTimeout(broadcastSteamHostInfo, 600);
+        return;
       }
+      const portInput = document.getElementById("steam-host-port-input") || document.getElementById("host-game-port-input");
+      const port = parseInt(portInput ? portInput.value : "") || activeGamePort || 25565;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
+        window.pywebview.api.steam_api("/api/share", { port: port, udp: false, label: "Minecraft" });
+      }
+      sendWS({
+        type: "chat_message",
+        text: "::STEAM_ANNOUNCE::" + JSON.stringify({ steamId: currentSteamState.self_info.steam_id, port: port })
+      });
+      Logger.info("SteamP2P", `Broadcasted host announce: SteamID=${currentSteamState.self_info.steam_id}, port=${port}`);
     }
 
     function handleSteamAnnounce(payloadStr, fromPeerId) {
@@ -2658,13 +2692,16 @@
           const autoStatus = document.getElementById("steam-auto-status");
           if (autoStatus) autoStatus.innerHTML = '<span class="status-dot warning"></span> <span>Подключение...</span>';
           const port = data.port || 25565;
+          Logger.info("SteamP2P", `Received host announce from ${fromPeerId}: dialing Steam host ${data.steamId} on local port ${port}`);
           if (window.pywebview && window.pywebview.api && window.pywebview.api.steam_api) {
             window.pywebview.api.steam_api("/api/connect", { peer: data.steamId, remote_port: port, local_port: port, udp: false }).then(res => {
               if (res && res.ok) {
                 if (autoStatus) autoStatus.innerHTML = '<span class="status-dot online"></span> <span>Подключено</span>';
                 showToast(`Steam P2P: 127.0.0.1:${port}`);
+                Logger.info("SteamP2P", `Successfully listening on 127.0.0.1:${port} -> Steam host ${data.steamId}`);
               } else {
                 if (autoStatus) autoStatus.innerHTML = `<span class="status-dot warning"></span> <span>Ошибка</span>`;
+                Logger.warn("SteamP2P", `Failed to connect to Steam host: ${res ? res.error : "unknown"}`);
               }
             });
           }
@@ -2673,6 +2710,7 @@
         console.warn("[SteamAuto] Failed to parse announce:", e);
       }
     }
+
 
     function sharePortOnSteam() {
       const portInput = document.getElementById("steam-host-port-input");

@@ -426,12 +426,8 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// Start runs the signaling server.
-func (s *Server) Start() error {
-	addr := fmt.Sprintf("0.0.0.0:%d", s.Port)
-	fmt.Printf("[LANForge Server] Listening on ws://%s\n", addr)
-
-	// Start LAN game broadcast sniffer (for LAN Radar)
+// StartRelay initializes the broadcast relay sniffer and event broadcaster for LAN Radar.
+func (s *Server) StartRelay() {
 	s.relay.Start()
 	go func() {
 		ch := s.relay.Subscribe()
@@ -442,9 +438,19 @@ func (s *Server) Start() error {
 			})
 		}
 	}()
+}
+
+// Start runs the signaling server.
+func (s *Server) Start() error {
+	addr := fmt.Sprintf("0.0.0.0:%d", s.Port)
+	fmt.Printf("[LANForge Server] Listening on ws://%s\n", addr)
+
+	// Start LAN game broadcast sniffer (for LAN Radar)
+	s.StartRelay()
 
 	return http.ListenAndServe(addr, s.Handler())
 }
+
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
