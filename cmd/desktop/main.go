@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -35,7 +36,7 @@ var embeddedHTML []byte
 var embeddedSteamDLL []byte
 
 var (
-	appVersion = "2.3.2"
+	appVersion = "2.3.3"
 
 	psapi               = syscall.NewLazyDLL("psapi.dll")
 	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
@@ -120,6 +121,47 @@ func getChildPIDs(parentPID uint32) []uint32 {
 	return descendants
 }
 
+func killDescendants(parentPID uint32) {
+	for _, pid := range getChildPIDs(parentPID) {
+		if h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid); err == nil {
+			_ = windows.TerminateProcess(h, 0)
+			_ = windows.CloseHandle(h)
+		}
+	}
+}
+
+func killStaleInstances() {
+	myPID := uint32(os.Getpid())
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return
+	}
+	defer windows.CloseHandle(snapshot)
+
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+
+	if err := windows.Process32First(snapshot, &entry); err == nil {
+		for {
+			name := windows.UTF16ToString(entry.ExeFile[:])
+			pid := entry.ProcessID
+			if pid != myPID {
+				lowerName := strings.ToLower(name)
+				if strings.HasPrefix(lowerName, "lanforge") || lowerName == "steamerrorreporter64.exe" {
+					if h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid); err == nil {
+						_ = windows.TerminateProcess(h, 0)
+						_ = windows.CloseHandle(h)
+					}
+				}
+			}
+			if err := windows.Process32Next(snapshot, &entry); err != nil {
+				break
+			}
+		}
+	}
+	time.Sleep(150 * time.Millisecond)
+}
+
 func trimMemory() {
 	runtime.GC()
 	debug.FreeOSMemory()
@@ -137,6 +179,9 @@ func trimMemory() {
 }
 
 func main() {
+	// 0. Завершение зависших фоновых копий (защита от конфликтов портов и зависания)
+	killStaleInstances()
+
 	// 1. Ограничение ресурсов Go рантайма
 	runtime.GOMAXPROCS(2)
 	debug.SetMemoryLimit(16 * 1024 * 1024)
@@ -154,7 +199,6 @@ func main() {
 	srv.StartRelay()
 	srvHandler := srv.Handler()
 
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
@@ -166,14 +210,28 @@ func main() {
 		srvHandler.ServeHTTP(w, r)
 	})
 
+	var listener net.Listener
+	var bindErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		listener, bindErr = net.Listen("tcp", "127.0.0.1:8787")
+		if bindErr == nil {
+			break
+		}
+		logMessage("WARN", "Server", fmt.Sprintf("Port 8787 busy (attempt %d/5): %v. Terminating stale instances...", attempt+1, bindErr))
+		killStaleInstances()
+		time.Sleep(250 * time.Millisecond)
+	}
+	if bindErr != nil {
+		logMessage("FATAL", "Server", fmt.Sprintf("Failed to bind 127.0.0.1:8787: %v", bindErr))
+		return
+	}
+	defer listener.Close()
+
 	go func() {
-		if err := http.ListenAndServe("127.0.0.1:8787", mux); err != nil {
-			logMessage("ERROR", "Server", fmt.Sprintf("In-process server error: %v", err))
+		if err := http.Serve(listener, mux); err != nil {
+			logMessage("INFO", "Server", fmt.Sprintf("In-process server stopped: %v", err))
 		}
 	}()
-
-	// Даем серверу долю секунды на открытие сокета
-	time.Sleep(100 * time.Millisecond)
 
 	// 4. Настройка флагов WebView2 для минимизации RAM
 	proxyBypass := "localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12,*.local,10.42.*"
@@ -436,10 +494,28 @@ func main() {
 		}
 	}()
 
+	// Фоновый watchdog: при закрытии окна гарантированно завершаем процесс
+	go func() {
+		user32 := syscall.NewLazyDLL("user32.dll")
+		procIsWindow := user32.NewProc("IsWindow")
+		for {
+			time.Sleep(1 * time.Second)
+			if hwnd := w.Window(); hwnd != nil {
+				r, _, _ := procIsWindow.Call(uintptr(hwnd))
+				if r == 0 {
+					logMessage("INFO", "App", "Window destroyed, terminating process")
+					killDescendants(uint32(os.Getpid()))
+					os.Exit(0)
+				}
+			}
+		}
+	}()
+
 	logMessage("INFO", "App", "Running Pure Go WebView2 loop")
 	w.Run()
 
 	// Завершение работы
+	killDescendants(uint32(os.Getpid()))
 	logMessage("INFO", "App", "Application exited cleanly")
 	os.Exit(0)
 }
