@@ -1,5 +1,5 @@
 r"""
-LANForge Desktop Launcher (v2.2.0)
+LANForge Desktop Launcher (v2.3.0)
 Single-process Desktop wrapper around LANForge Web UI & Local Server.
 Features:
 - Spawns local signaling/game server (Go binary)
@@ -9,7 +9,7 @@ Features:
 - Cross-platform support
 """
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 import os
 import sys
@@ -22,6 +22,8 @@ import subprocess
 import atexit
 import threading
 import urllib.request
+import gc
+import ctypes
 from logging.handlers import RotatingFileHandler
 
 # AppData configuration & logs directory
@@ -53,14 +55,25 @@ PROXY_BYPASS = "localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12,
 os.environ["NO_PROXY"] = PROXY_BYPASS
 os.environ["no_proxy"] = PROXY_BYPASS
 
-# Edge WebView2 Chromium flags for proxy bypass, zero-CORS file restrictions, and hardware GPU acceleration
+# Edge WebView2 Chromium flags optimized for minimal RAM footprint:
+# 1. Disables dedicated GPU process and rasterizer bloat (saves ~80-95 MB RAM)
+# 2. Activates low-end device mode to restrict internal Chromium memory buffers and image caches
+# 3. Limits renderer processes to 1
+# 4. Optimizes V8 JavaScript engine for size
+# 5. Disables unused background Chromium services and network prefetching
 os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
     f"--proxy-bypass-list={PROXY_BYPASS} "
     "--disable-web-security "
     "--allow-file-access-from-files "
-    "--enable-gpu-rasterization "
-    "--enable-zero-copy "
-    "--disable-features=OutOfProcessOpengl"
+    "--disable-gpu "
+    "--disable-gpu-compositing "
+    "--enable-low-end-device-mode "
+    "--renderer-process-limit=1 "
+    "--js-flags=--optimize_for_size "
+    "--disable-background-networking "
+    "--disable-component-update "
+    "--disable-sync "
+    "--disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,ElasticOverscroll"
 )
 
 import webview
@@ -86,6 +99,92 @@ else:
 server_proc = None
 main_window = None
 tray = None
+_stop_mem_trim = threading.Event()
+
+# ==============================================================================
+# Native Windows Memory Manager (Working Set Trimming)
+# ==============================================================================
+
+class PROCESSENTRY32(ctypes.Structure):
+    _fields_ = [
+        ('dwSize', ctypes.c_ulong),
+        ('cntUsage', ctypes.c_ulong),
+        ('th32ProcessID', ctypes.c_ulong),
+        ('th32DefaultHeapID', ctypes.c_size_t),
+        ('th32ModuleID', ctypes.c_ulong),
+        ('cntThreads', ctypes.c_ulong),
+        ('th32ParentProcessID', ctypes.c_ulong),
+        ('pcPriClassBase', ctypes.c_long),
+        ('dwFlags', ctypes.c_ulong),
+        ('szExeFile', ctypes.c_char * 260)
+    ]
+
+def get_descendant_pids(parent_pid):
+    """Рекурсивно находит PID всех дочерних процессов (WebView2, Go Server)."""
+    if sys.platform != "win32":
+        return []
+    try:
+        snapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot(0x00000002, 0)  # TH32CS_SNAPPROCESS
+        if snapshot == -1 or snapshot == 0:
+            return []
+
+        entry = PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        children_map = {}
+
+        if ctypes.windll.kernel32.Process32First(snapshot, ctypes.byref(entry)):
+            while True:
+                ppid = entry.th32ParentProcessID
+                pid = entry.th32ProcessID
+                if ppid not in children_map:
+                    children_map[ppid] = []
+                children_map[ppid].append(pid)
+                if not ctypes.windll.kernel32.Process32Next(snapshot, ctypes.byref(entry)):
+                    break
+        ctypes.windll.kernel32.CloseHandle(snapshot)
+
+        descendants = []
+        to_visit = [parent_pid]
+        while to_visit:
+            curr = to_visit.pop(0)
+            for child_pid in children_map.get(curr, []):
+                descendants.append(child_pid)
+                to_visit.append(child_pid)
+        return descendants
+    except Exception as e:
+        logger.debug(f"[Toolhelp32 Error] {e}")
+        return []
+
+def trim_working_set():
+    """Сбрасывает физический рабочий набор памяти Python, Go сервера и WebView2."""
+    try:
+        # Принудительный сбор мусора Python
+        gc.collect()
+
+        if sys.platform == "win32":
+            pids = {os.getpid()}
+            if server_proc and server_proc.pid:
+                pids.add(server_proc.pid)
+            for pid in get_descendant_pids(os.getpid()):
+                pids.add(pid)
+
+            for pid in pids:
+                try:
+                    handle = ctypes.windll.kernel32.OpenProcess(0x0100 | 0x0400, False, pid)  # PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION
+                    if handle:
+                        ctypes.windll.psapi.EmptyWorkingSet(handle)
+                        ctypes.windll.kernel32.CloseHandle(handle)
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.debug(f"[Memory Trim Error] {e}")
+
+def memory_manager_loop():
+    """Фоновый демон периодического сброса неиспользуемой памяти каждые 60 секунд."""
+    while not _stop_mem_trim.is_set():
+        if _stop_mem_trim.wait(60):
+            break
+        trim_working_set()
 
 def is_port_open(host="127.0.0.1", port=8787):
     try:
@@ -204,6 +303,10 @@ class JsApi:
 
     def get_app_version(self):
         return __version__
+
+    def trim_memory(self):
+        trim_working_set()
+        return True
 
     def log(self, level, tag, message):
         lvl = str(level).lower()
@@ -348,6 +451,7 @@ def on_show_window():
 def on_quit_app():
     global main_window
     logger.info("Application quitting requested.")
+    _stop_mem_trim.set()
     try:
         req = urllib.request.Request("http://127.0.0.1:8787/api/steam/stop", data=b"{}", headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=0.5):
@@ -384,6 +488,9 @@ def main():
 
     api = JsApi()
 
+    # Start background memory manager daemon (cleans up working set every 60s)
+    threading.Thread(target=memory_manager_loop, daemon=True).start()
+
     main_window = webview.create_window(
         title="LANForge",
         url=html_path,
@@ -396,8 +503,21 @@ def main():
         easy_drag=False
     )
 
+    def on_loaded():
+        logger.info("UI loaded. Scheduling working set optimization in 2.5s...")
+        def delayed_trim():
+            time.sleep(2.5)
+            trim_working_set()
+            logger.info("Startup working set optimization applied.")
+        threading.Thread(target=delayed_trim, daemon=True).start()
+
+    def on_minimized():
+        logger.debug("Window minimized to taskbar/tray, trimming working set.")
+        trim_working_set()
+
     def on_closed():
         logger.info("Main window closed event triggered.")
+        _stop_mem_trim.set()
         try:
             req = urllib.request.Request("http://127.0.0.1:8787/api/steam/stop", data=b"{}", headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=0.5):
@@ -408,6 +528,8 @@ def main():
             tray.stop()
         stop_backend_server()
 
+    main_window.events.loaded += on_loaded
+    main_window.events.minimized += on_minimized
     main_window.events.closed += on_closed
 
     webview.start(gui="edgechromium", debug=False, storage_path=app_data_dir)

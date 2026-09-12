@@ -250,6 +250,9 @@ func findSteamDLL() string {
 			filepath.Join(dir, "bin", "steam-tunnel", "steam_api64.dll"),
 		)
 	}
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		candidates = append(candidates, filepath.Join(appData, "LANForge", "steam_api64.dll"))
+	}
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
 			return c

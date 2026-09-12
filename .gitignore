@@ -11,6 +11,7 @@ __pycache__/
 # Whitelist project spec and steam dll
 !LANForge.spec
 !bin/steam-tunnel/*.dll
+!cmd/desktop/bin/*.dll
 
 # Environment & Logs
 .env
