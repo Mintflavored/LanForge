@@ -20,6 +20,18 @@ jobs:
           go build -v ./...
           go test -v ./...
 
+  build-desktop:
+    name: Build Windows Desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build Desktop Executable
+        run: |
+          go build -v -ldflags="-s -w -H=windowsgui" ./cmd/desktop
+
   lint-python:
     name: Validate Python Syntax
     runs-on: windows-latest
@@ -31,3 +43,4 @@ jobs:
       - name: Syntax Check
         run: |
           python -m py_compile lanforge_gui.py discord_rpc.py tray_manager.py
+
