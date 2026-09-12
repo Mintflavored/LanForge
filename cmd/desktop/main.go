@@ -35,7 +35,7 @@ var embeddedHTML []byte
 var embeddedSteamDLL []byte
 
 var (
-	appVersion = "2.3.1"
+	appVersion = "2.3.2"
 
 	psapi               = syscall.NewLazyDLL("psapi.dll")
 	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
@@ -207,7 +207,7 @@ func main() {
 			Title:     "LANForge",
 			Width:     1040,
 			Height:    660,
-			IconId:    0,
+			IconId:    1,
 			Center:    true,
 		},
 	})
@@ -219,6 +219,21 @@ func main() {
 
 	w.SetTitle("LANForge")
 	w.SetSize(1040, 660, webview2.HintNone)
+
+	// Явная установка иконки окна для панели задач и заголовка (Win32 WM_SETICON)
+	if hwnd := w.Window(); hwnd != nil {
+		user32 := syscall.NewLazyDLL("user32.dll")
+		kernel32 := syscall.NewLazyDLL("kernel32.dll")
+		procSendMessage := user32.NewProc("SendMessageW")
+		procLoadImage := user32.NewProc("LoadImageW")
+		procGetModuleHandle := kernel32.NewProc("GetModuleHandleW")
+		hInst, _, _ := procGetModuleHandle.Call(0)
+		hIcon, _, _ := procLoadImage.Call(hInst, 1, 1, 0, 0, 0x00000040|0x00008000)
+		if hIcon != 0 {
+			procSendMessage.Call(uintptr(hwnd), 0x0080 /* WM_SETICON */, 0 /* ICON_SMALL */, hIcon)
+			procSendMessage.Call(uintptr(hwnd), 0x0080 /* WM_SETICON */, 1 /* ICON_BIG */, hIcon)
+		}
+	}
 
 	// 6. Регистрация двустороннего Go <-> JavaScript моста (совместимость с pywebview API)
 	w.Bind("goLog", func(level, tag, msg string) {

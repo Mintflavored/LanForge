@@ -1347,6 +1347,7 @@
     let currentServerUrl = localStorage.getItem("lanforge_server_url") || "wss://lanforge.onrender.com";
     let myVirtualIp = "10.42.0.1";
     let myId = "";
+    let mySessionToken = "";
     let selectedCategory = "Все";
     let ws = null;
     let pingTimer = null;
@@ -1461,11 +1462,13 @@
 
         // If client had an active room session, re-sync with the server
         if (currentRoom && currentRoom.code) {
-          Logger.info("Room", `Re-syncing existing room session: ${currentRoom.code}`);
+          Logger.info("Room", `Re-syncing existing room session: ${currentRoom.code}, peerId: ${myId}`);
           sendWS({
             type: "join_room",
             code: currentRoom.code,
-            nick: myNick || "Player"
+            nick: myNick || "Player",
+            peerId: myId,
+            sessionToken: mySessionToken
           });
         }
       };
@@ -1642,7 +1645,11 @@
       switch (msg.type) {
         case "room_created":
         case "room_joined":
+          const isReconnecting = (currentRoom && currentRoom.code === msg.room.code);
           currentRoom = msg.room;
+          if (msg.sessionToken) {
+            mySessionToken = msg.sessionToken;
+          }
           if (msg.you) {
             myVirtualIp = msg.you.virtualIp || "10.42.0.1";
             myId = msg.you.id || "";
@@ -1650,10 +1657,14 @@
           }
           updateRoomUI();
           switchTab("overview");
-          playSound(msg.type === "room_created" ? "create" : "join");
+          if (!isReconnecting) {
+            playSound(msg.type === "room_created" ? "create" : "join");
+            showToast(msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
+            notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
+          } else {
+            showToast("Связь с комнатой восстановлена");
+          }
           syncNativePresence();
-          showToast(msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
-          notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
           if (currentRoom && currentRoom.hostId === myId) {
             refreshSteamStatus();
             setTimeout(broadcastSteamHostInfo, 800);
@@ -1802,7 +1813,15 @@
 
 
         case "error":
-          showToast("Ошибка: " + (msg.errorMessage || msg.code || "Неизвестная ошибка"));
+          if (msg.code === "JOIN_ROOM_FAILED" && currentRoom) {
+            Logger.warn("Room", `Failed to re-sync room session: ${msg.errorMessage}`);
+            currentRoom = null;
+            mySessionToken = "";
+            updateRoomUI();
+            showToast("Сессия комнаты завершена сервером");
+          } else {
+            showToast("Ошибка: " + (msg.errorMessage || msg.code || "Неизвестная ошибка"));
+          }
           break;
       }
     }
@@ -2768,6 +2787,7 @@
         fetch("http://127.0.0.1:8787/api/steam/stop", { method: "POST" }).catch(() => {});
       }
       currentRoom = null;
+      mySessionToken = "";
       document.getElementById("chat-messages-container").innerHTML = "";
       updateRoomUI();
       playSound("leave");

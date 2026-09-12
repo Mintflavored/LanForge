@@ -15,9 +15,10 @@ type Client struct {
 	ServerURL   string
 	Conn        *websocket.Conn
 	Connected   bool
-	You         protocol.PeerState
-	Room        *protocol.RoomState
-	Events      chan protocol.ServerMessage
+	You          protocol.PeerState
+	SessionToken string
+	Room         *protocol.RoomState
+	Events       chan protocol.ServerMessage
 	stopChan    chan struct{}
 	mu          sync.RWMutex
 	writeMu     sync.Mutex
@@ -106,6 +107,9 @@ func (c *Client) handleServerMessage(msg protocol.ServerMessage) {
 		if msg.You != nil {
 			c.You = *msg.You
 		}
+		if msg.SessionToken != "" {
+			c.SessionToken = msg.SessionToken
+		}
 
 	case "peer_joined":
 		if c.Room != nil && msg.Peer != nil {
@@ -183,11 +187,18 @@ func (c *Client) CreateRoom(name, gamePreset, password, hostNick string) error {
 
 // JoinRoom sends a join room request.
 func (c *Client) JoinRoom(code, nick, password string) error {
+	c.mu.RLock()
+	peerID := c.You.ID
+	token := c.SessionToken
+	c.mu.RUnlock()
+
 	return c.sendJSON(protocol.ClientMessage{
-		Type:     "join_room",
-		Code:     code,
-		Nick:     nick,
-		Password: password,
+		Type:         "join_room",
+		Code:         code,
+		Nick:         nick,
+		Password:     password,
+		PeerID:       peerID,
+		SessionToken: token,
 	})
 }
 
@@ -195,6 +206,7 @@ func (c *Client) JoinRoom(code, nick, password string) error {
 func (c *Client) LeaveRoom() error {
 	c.mu.Lock()
 	c.Room = nil
+	c.SessionToken = ""
 	c.mu.Unlock()
 	return c.sendJSON(protocol.ClientMessage{
 		Type: "leave_room",

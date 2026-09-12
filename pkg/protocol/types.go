@@ -57,6 +57,7 @@ type ClientMessage struct {
 	Code           string          `json:"code,omitempty"`
 	Nick           string          `json:"nick,omitempty"`
 	PeerID         string          `json:"peerId,omitempty"`
+	SessionToken   string          `json:"sessionToken,omitempty"`
 	TargetPeerID   string          `json:"targetPeerId,omitempty"`
 	SignalType     string          `json:"signalType,omitempty"`
 	Data           json.RawMessage `json:"data,omitempty"`
@@ -76,6 +77,7 @@ type ServerMessage struct {
 	Type            string            `json:"type"`
 	Room            *RoomState        `json:"room,omitempty"`
 	You             *PeerState        `json:"you,omitempty"`
+	SessionToken    string            `json:"sessionToken,omitempty"`
 	Peer            *PeerState        `json:"peer,omitempty"`
 	PeerID          string            `json:"peerId,omitempty"`
 	Reason          string            `json:"reason,omitempty"`

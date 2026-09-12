@@ -11,12 +11,17 @@ import (
 
 // ConnectedPeer represents an active WebSocket connection of a player.
 type ConnectedPeer struct {
-	ID       string
-	Conn     *websocket.Conn
-	State    protocol.PeerState
-	RoomCode string
-	LastSeen time.Time
-	Mu       sync.Mutex
+	ID             string
+	Conn           *websocket.Conn
+	ConnGen        uint64
+	SessionToken   string
+	State          protocol.PeerState
+	RoomCode       string
+	LastSeen       time.Time
+	DisconnectedAt time.Time
+	EvictTimer     *time.Timer
+	IsTunnel       bool
+	Mu             sync.Mutex
 }
 
 // SendJSON sends a thread-safe JSON message to this peer.

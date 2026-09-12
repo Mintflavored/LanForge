@@ -460,7 +460,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	peer := s.Manager.RegisterPeer(conn)
-	defer s.Manager.UnregisterPeer(peer.ID)
+	connGen := peer.ConnGen
+
+	defer func() {
+		s.Manager.HandlePeerDisconnect(peer, conn, connGen)
+	}()
 
 	for {
 		msgType, raw, err := conn.ReadMessage()
@@ -474,9 +478,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if len(raw) >= 1+targetLen {
 					targetID := string(raw[1 : 1+targetLen])
 					payload := raw[1+targetLen:]
-					targetPeer := s.Manager.GetPeer(targetID)
-					if targetPeer != nil && targetPeer.Conn != nil {
-						_ = targetPeer.Conn.WriteMessage(websocket.BinaryMessage, payload)
+					targetConn := s.Manager.GetBinaryConn(targetID)
+					if targetConn != nil {
+						_ = targetConn.WriteMessage(websocket.BinaryMessage, payload)
 					}
 				}
 			}
@@ -493,21 +497,25 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		s.handleClientMessage(peer, msg)
+		peer = s.handleClientMessage(peer, msg)
+		connGen = peer.ConnGen
 	}
 }
 
-func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMessage) {
+func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMessage) *ConnectedPeer {
 	peer.LastSeen = time.Now()
 
 	switch msg.Type {
 	case "tunnel_register":
+		peer.IsTunnel = true
 		if msg.PeerID != "" {
-			s.Manager.RebindPeerID(peer, msg.PeerID)
+			peer.ID = msg.PeerID
+			s.Manager.RegisterTunnel(msg.PeerID, peer.Conn)
 		}
 		if msg.Code != "" {
 			peer.RoomCode = msg.Code
 		}
+		return peer
 
 	case "create_room":
 		room, you, err := s.Manager.CreateRoom(peer, msg.Name, msg.GamePreset, msg.Password, msg.HostNick, msg.MaxPeers)
@@ -517,40 +525,45 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 				Code:         "CREATE_ROOM_FAILED",
 				ErrorMessage: err.Error(),
 			})
-			return
+			return peer
 		}
 		_ = peer.SendJSON(protocol.ServerMessage{
-			Type: "room_created",
-			Room: &room,
-			You:  &you,
+			Type:         "room_created",
+			Room:         &room,
+			You:          &you,
+			SessionToken: peer.SessionToken,
 		})
+		return peer
 
 	case "join_room":
-		room, you, err := s.Manager.JoinRoom(peer, msg.Code, msg.Nick, msg.Password)
+		room, activePeer, err := s.Manager.JoinRoom(peer, msg.Code, msg.Nick, msg.Password, msg.PeerID, msg.SessionToken)
 		if err != nil {
 			_ = peer.SendJSON(protocol.ServerMessage{
 				Type:         "error",
 				Code:         "JOIN_ROOM_FAILED",
 				ErrorMessage: err.Error(),
 			})
-			return
+			return peer
 		}
-		_ = peer.SendJSON(protocol.ServerMessage{
-			Type: "room_joined",
-			Room: &room,
-			You:  &you,
+		_ = activePeer.SendJSON(protocol.ServerMessage{
+			Type:         "room_joined",
+			Room:         &room,
+			You:          &activePeer.State,
+			SessionToken: activePeer.SessionToken,
 		})
+		return activePeer
 
 	case "leave_room":
 		s.Manager.LeaveRoom(peer)
+		return peer
 
 	case "signal":
 		if peer.RoomCode == "" {
-			return
+			return peer
 		}
 		room := s.Manager.GetRoom(peer.RoomCode)
 		if room == nil {
-			return
+			return peer
 		}
 		room.SendTo(msg.TargetPeerID, protocol.ServerMessage{
 			Type:       "signal_forward",
@@ -561,11 +574,11 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 
 	case "chat_message":
 		if peer.RoomCode == "" {
-			return
+			return peer
 		}
 		room := s.Manager.GetRoom(peer.RoomCode)
 		if room == nil {
-			return
+			return peer
 		}
 		chat := &protocol.ChatMessage{
 			ID:         generateID("msg"),
@@ -581,7 +594,7 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 
 	case "update_room_port":
 		if peer.RoomCode == "" || msg.Port <= 0 {
-			return
+			return peer
 		}
 		room := s.Manager.GetRoom(peer.RoomCode)
 		if room != nil {
@@ -593,11 +606,11 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 
 	case "update_status":
 		if peer.RoomCode == "" {
-			return
+			return peer
 		}
 		room := s.Manager.GetRoom(peer.RoomCode)
 		if room == nil {
-			return
+			return peer
 		}
 		if msg.CurrentGame != "" {
 			peer.State.CurrentGame = msg.CurrentGame
@@ -640,4 +653,5 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 			ServerTimestamp: time.Now().UnixMilli(),
 		})
 	}
+	return peer
 }

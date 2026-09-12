@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -265,15 +266,15 @@ func ensureAppID() {
 	_ = os.Setenv("SteamAppId", "480")
 	_ = os.Setenv("SteamGameId", "480")
 
-	// Ensure steam_appid.txt exists in current directory and next to binary
+	// Clean up any legacy steam_appid.txt file left behind in current directory or next to binary
 	dirs := []string{"."}
 	if exe, err := os.Executable(); err == nil {
 		dirs = append(dirs, filepath.Dir(exe))
 	}
 	for _, d := range dirs {
 		p := filepath.Join(d, "steam_appid.txt")
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			_ = os.WriteFile(p, []byte("480\n"), 0644)
+		if data, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(data)) == "480" {
+			_ = os.Remove(p)
 		}
 	}
 }
