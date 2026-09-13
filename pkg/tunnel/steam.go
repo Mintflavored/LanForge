@@ -34,6 +34,18 @@ const (
 	k_ESteamNetworkingConnectionState_Connected              = 3
 	k_ESteamNetworkingConnectionState_ClosedByPeer           = 4
 	k_ESteamNetworkingConnectionState_ProblemDetectedLocally = 5
+
+	// SteamNetworkingSockets Configuration Keys
+	k_ESteamNetworkingConfig_TimeoutInitial     = 24
+	k_ESteamNetworkingConfig_TimeoutConnected   = 25
+	k_ESteamNetworkingConfig_SendBufferSize     = 9
+	k_ESteamNetworkingConfig_RecvBufferSize     = 47
+	k_ESteamNetworkingConfig_RecvBufferMessages = 48
+	k_ESteamNetworkingConfig_SendRateMin        = 10
+	k_ESteamNetworkingConfig_SendRateMax        = 11
+	k_ESteamNetworkingConfig_NagleTime          = 12
+	k_ESteamNetworkingConfig_STUN_ServerList    = 103
+	k_ESteamNetworkingConfig_ICE_Enable         = 104
 )
 
 // ptrFromUintptr converts a raw uintptr to unsafe.Pointer without violating go vet.
@@ -352,19 +364,28 @@ func (m *SteamManager) Init() error {
 	m.utilsPtr, _, _ = m.procUtils.Call()
 
 	// Tune SteamNetworkingSockets SDR buffers for heavy gaming traffic (e.g. Minecraft chunks)
-	// Config #9: SendBufferSize -> 32 MB (default 512 KB)
-	m.procSetGlobalInt32.Call(m.utilsPtr, 9, 32*1024*1024)
-	// Config #47: RecvBufferSize -> 32 MB
-	m.procSetGlobalInt32.Call(m.utilsPtr, 47, 32*1024*1024)
-	// Config #11: SendRateMax -> 100 MB/s
-	m.procSetGlobalInt32.Call(m.utilsPtr, 11, 100*1024*1024)
-	// Config #12: NagleTime -> 0 (instant packet transmission without 5ms batch delay)
-	m.procSetGlobalInt32.Call(m.utilsPtr, 12, 0)
+	// TimeoutConnected (60s) and TimeoutInitial (30s) prevent false disconnects on lag/death
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_TimeoutConnected, 60000)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_TimeoutInitial, 30000)
+
+	// Config #9 & #47: Send/Recv buffers -> 64 MB (default 512 KB)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_SendBufferSize, 64*1024*1024)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_RecvBufferSize, 64*1024*1024)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_RecvBufferMessages, 131072)
+
+	// Config #10 & #11: Send rate: Min 1 MB/s, Max 100 MB/s
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_SendRateMin, 1024*1024)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_SendRateMax, 100*1024*1024)
+
+	// Config #12: NagleTime -> 1000 us (1ms: allows MTU packing without delay)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_NagleTime, 1000)
+
 	// Config #104: P2P_Transport_ICE_Enable -> 1 (enable direct UDP hole punching when possible)
-	m.procSetGlobalInt32.Call(m.utilsPtr, 104, 1)
+	m.procSetGlobalInt32.Call(m.utilsPtr, k_ESteamNetworkingConfig_ICE_Enable, 1)
+
 	// Config #103: P2P_STUN_ServerList -> fast public STUN servers for direct NAT traversal
 	stunServers := []byte("stun.l.google.com:19302,stun1.l.google.com:19302,stun.cloudflare.com:3478\x00")
-	m.procSetGlobalString.Call(m.utilsPtr, 103, uintptr(unsafe.Pointer(&stunServers[0])))
+	m.procSetGlobalString.Call(m.utilsPtr, k_ESteamNetworkingConfig_STUN_ServerList, uintptr(unsafe.Pointer(&stunServers[0])))
 
 	// Optimize Windows timer interrupt frequency to 1ms (eliminates 15.6ms scheduler lag)
 	initSystemTimerResolution()
@@ -411,6 +432,16 @@ func (m *SteamManager) Init() error {
 	}()
 
 	return nil
+}
+
+func (m *SteamManager) tuneConnection(hConn uint32) {
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_TimeoutConnected, 60000)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_SendBufferSize, 64*1024*1024)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_RecvBufferSize, 64*1024*1024)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_RecvBufferMessages, 131072)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_SendRateMin, 1024*1024)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_SendRateMax, 100*1024*1024)
+	m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), k_ESteamNetworkingConfig_NagleTime, 1000)
 }
 
 func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
@@ -463,29 +494,26 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 			rAccept, _, _ := m.procAcceptConn.Call(m.socketsPtr, uintptr(hConn))
 			if rAccept != 1 {
 				log.Printf("[Steam P2P Host] AcceptConnection failed for #%d: result=%d", hConn, rAccept)
-				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 1)
 				return
 			}
 			log.Printf("[Steam P2P Host] Accepted peer connection #%d successfully!", hConn)
 
-			// Configure 32MB connection buffers and zero nagle delay
-			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 9, 32*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 47, 32*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 11, 100*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, uintptr(hConn), 12, 0)
+			// Apply robust 64MB buffers and 60s timeout
+			m.tuneConnection(hConn)
 
 			// Connect to local Minecraft server
 			localAddr := fmt.Sprintf("127.0.0.1:%d", gamePort)
 			tcpConn, err := net.DialTimeout("tcp", localAddr, 3*time.Second)
 			if err != nil {
 				log.Printf("[Steam P2P Host] Failed to dial local game on %s: %v", localAddr, err)
-				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 1)
 				return
 			}
 			if tc, ok := tcpConn.(*net.TCPConn); ok {
 				_ = tc.SetNoDelay(true)
-				_ = tc.SetReadBuffer(128 * 1024)
-				_ = tc.SetWriteBuffer(128 * 1024)
+				_ = tc.SetReadBuffer(2 * 1024 * 1024)
+				_ = tc.SetWriteBuffer(2 * 1024 * 1024)
 			}
 
 			sc := &steamConn{hConn: hConn, tcpConn: tcpConn}
@@ -507,7 +535,7 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 			delete(m.activeConns, hConn)
 		}
 		m.connsMu.Unlock()
-		m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+		m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 1)
 		log.Printf("[Steam P2P] Connection #%d closed.", hConn)
 	}
 }
@@ -601,15 +629,12 @@ func (m *SteamManager) StartClient(hostSteamID uint64, localPort int) (int, erro
 
 			if tc, ok := tcpConn.(*net.TCPConn); ok {
 				_ = tc.SetNoDelay(true)
-				_ = tc.SetReadBuffer(128 * 1024)
-				_ = tc.SetWriteBuffer(128 * 1024)
+				_ = tc.SetReadBuffer(2 * 1024 * 1024)
+				_ = tc.SetWriteBuffer(2 * 1024 * 1024)
 			}
 
-			// Configure 32MB connection buffers and zero nagle delay
-			m.procSetConnInt32.Call(m.utilsPtr, hConn, 9, 32*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, hConn, 47, 32*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, hConn, 11, 100*1024*1024)
-			m.procSetConnInt32.Call(m.utilsPtr, hConn, 12, 0)
+			// Apply robust connection buffers and 60s timeout
+			m.tuneConnection(uint32(hConn))
 
 			sc := &steamConn{hConn: uint32(hConn), tcpConn: tcpConn}
 			m.connsMu.Lock()
@@ -664,7 +689,7 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 		m.connsMu.Lock()
 		delete(m.activeConns, sc.hConn)
 		m.connsMu.Unlock()
-		m.procCloseConn.Call(m.socketsPtr, uintptr(sc.hConn), 0, 0, 0)
+		m.procCloseConn.Call(m.socketsPtr, uintptr(sc.hConn), 0, 0, 1)
 	}()
 
 	buf := make([]byte, 32768)
@@ -681,7 +706,7 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 					uintptr(sc.hConn),
 					uintptr(unsafe.Pointer(&buf[0])),
 					uintptr(uint32(n)),
-					k_nSteamNetworkingSend_ReliableNoNagle,
+					k_nSteamNetworkingSend_Reliable,
 					0,
 				)
 				if r == 1 {
@@ -690,9 +715,9 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 					break
 				}
 				// 25 = k_EResultLimitExceeded (buffer full), 17 = k_EResultInvalidState (handshake/re-route in progress)
-				if (r == 25 || r == 17) && retries < 500 {
+				if (r == 25 || r == 17) && retries < 3000 {
 					retries++
-					backoff := time.Duration(1+(retries%10)) * time.Millisecond
+					backoff := time.Duration(1+((retries*2)%20)) * time.Millisecond
 					time.Sleep(backoff)
 					continue
 				}
@@ -748,15 +773,18 @@ func (m *SteamManager) pumpLoop() {
 					m.connsMu.Lock()
 					delete(m.activeConns, hConn)
 					m.connsMu.Unlock()
-					m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+					m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 1)
 					continue
 				}
 			}
 
-			// Read up to 32 messages
-			var msgs [32]uintptr
-			n, _, _ := m.procRecvMsgs.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&msgs[0])), 32)
-			if n > 0 {
+			// Drain up to 256 messages per connection to prevent chunk transfer delays
+			for batch := 0; batch < 8; batch++ {
+				var msgs [32]uintptr
+				n, _, _ := m.procRecvMsgs.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&msgs[0])), 32)
+				if n == 0 {
+					break
+				}
 				hasData = true
 				for i := 0; i < int(n); i++ {
 					msgPtr := msgs[i]
@@ -772,6 +800,9 @@ func (m *SteamManager) pumpLoop() {
 						m.BytesDown.Add(uint64(cbSize))
 					}
 					m.procReleaseMsg.Call(msgPtr)
+				}
+				if n < 32 {
+					break
 				}
 			}
 		}
@@ -801,7 +832,7 @@ func (m *SteamManager) Stop() {
 	m.connsMu.Lock()
 	for hConn, sc := range m.activeConns {
 		sc.close()
-		m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+		m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 1)
 		delete(m.activeConns, hConn)
 	}
 	m.connsMu.Unlock()

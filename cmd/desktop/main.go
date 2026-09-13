@@ -33,9 +33,6 @@ var embeddedHTML []byte
 var (
 	appVersion = "2.3.5"
 
-	psapi               = syscall.NewLazyDLL("psapi.dll")
-	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
-
 	appDataDir string
 	configFile string
 	logFile    string
@@ -105,11 +102,6 @@ func acquireSingleInstance() bool {
 func trimMemory() {
 	runtime.GC()
 	debug.FreeOSMemory()
-
-	hCur, err := windows.GetCurrentProcess()
-	if err == nil {
-		_, _, _ = procEmptyWorkingSet.Call(uintptr(hCur))
-	}
 }
 
 func main() {
@@ -123,11 +115,6 @@ func main() {
 			_ = windows.CloseHandle(hSingleMutex)
 		}
 	}()
-
-	// 1. Ограничение ресурсов Go рантайма
-	runtime.GOMAXPROCS(2)
-	debug.SetMemoryLimit(16 * 1024 * 1024)
-	debug.SetGCPercent(50)
 
 	logMessage("INFO", "Init", fmt.Sprintf("=== LANForge v%s Pure Go Desktop Starting ===", appVersion))
 
@@ -425,17 +412,9 @@ func main() {
 
 	// 9. Автоматический фоновый тримминг памяти
 	go func() {
-		// Первичный сброс памяти после загрузки UI
-		time.Sleep(2500 * time.Millisecond)
+		// Первичный мягкий сброс памяти после загрузки UI
+		time.Sleep(3 * time.Second)
 		trimMemory()
-		logMessage("INFO", "Memory", "Initial startup working set trim applied")
-
-		// Периодический сброс каждые 60 секунд
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			trimMemory()
-		}
 	}()
 
 	// Фоновый watchdog: при закрытии окна гарантированно завершаем процесс
