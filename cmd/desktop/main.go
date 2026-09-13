@@ -20,23 +20,18 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 	"github.com/lanforge/lanforge/pkg/discord"
 	"github.com/lanforge/lanforge/pkg/server"
 	"golang.org/x/sys/windows"
-
 )
 
 //go:embed ui/index.html
 var embeddedHTML []byte
 
-//go:embed bin/steam_api64.dll
-var embeddedSteamDLL []byte
-
 var (
-	appVersion = "2.3.4"
+	appVersion = "2.3.5"
 
 	psapi               = syscall.NewLazyDLL("psapi.dll")
 	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
@@ -47,6 +42,7 @@ var (
 	logMu      sync.Mutex
 
 	discordClient *discord.Client
+	hSingleMutex  windows.Handle
 )
 
 type safeLogWriter struct {
@@ -73,18 +69,11 @@ func init() {
 	configFile = filepath.Join(appDataDir, "config.json")
 	logFile = filepath.Join(appDataDir, "lanforge.log")
 
-	// Распаковываем steam_api64.dll в AppData, если её там ещё нет
-	dllTarget := filepath.Join(appDataDir, "steam_api64.dll")
-	if fi, err := os.Stat(dllTarget); os.IsNotExist(err) || fi.Size() == 0 {
-		_ = os.WriteFile(dllTarget, embeddedSteamDLL, 0755)
-	}
-
 	// Направляем standard library log в lanforge.log для сохранения диагностики Steam P2P и туннелей
 	if lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 		log.SetOutput(&safeLogWriter{file: lf})
 	}
 }
-
 
 func logMessage(level, tag, message string) {
 	logMu.Lock()
@@ -100,101 +89,40 @@ func logMessage(level, tag, message string) {
 	}
 }
 
-func getChildPIDs(parentPID uint32) []uint32 {
-	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+func acquireSingleInstance() bool {
+	mutexName, err := windows.UTF16PtrFromString("Global\\LANForgeSingleInstance")
 	if err != nil {
-		return nil
+		return true
 	}
-	defer windows.CloseHandle(snapshot)
-
-	var entry windows.ProcessEntry32
-	entry.Size = uint32(unsafe.Sizeof(entry))
-
-	childrenMap := make(map[uint32][]uint32)
-	if err := windows.Process32First(snapshot, &entry); err == nil {
-		for {
-			ppid := entry.ParentProcessID
-			pid := entry.ProcessID
-			childrenMap[ppid] = append(childrenMap[ppid], pid)
-			if err := windows.Process32Next(snapshot, &entry); err != nil {
-				break
-			}
-		}
+	h, err := windows.CreateMutex(nil, true, mutexName)
+	if err == windows.ERROR_ALREADY_EXISTS {
+		return false
 	}
-
-	var descendants []uint32
-	toVisit := []uint32{parentPID}
-	for len(toVisit) > 0 {
-		curr := toVisit[0]
-		toVisit = toVisit[1:]
-		for _, child := range childrenMap[curr] {
-			descendants = append(descendants, child)
-			toVisit = append(toVisit, child)
-		}
-	}
-	return descendants
-}
-
-func killDescendants(parentPID uint32) {
-	for _, pid := range getChildPIDs(parentPID) {
-		if h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid); err == nil {
-			_ = windows.TerminateProcess(h, 0)
-			_ = windows.CloseHandle(h)
-		}
-	}
-}
-
-func killStaleInstances() {
-	myPID := uint32(os.Getpid())
-	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-	if err != nil {
-		return
-	}
-	defer windows.CloseHandle(snapshot)
-
-	var entry windows.ProcessEntry32
-	entry.Size = uint32(unsafe.Sizeof(entry))
-
-	if err := windows.Process32First(snapshot, &entry); err == nil {
-		for {
-			name := windows.UTF16ToString(entry.ExeFile[:])
-			pid := entry.ProcessID
-			if pid != myPID {
-				lowerName := strings.ToLower(name)
-				if strings.HasPrefix(lowerName, "lanforge") || lowerName == "steamerrorreporter64.exe" {
-					if h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid); err == nil {
-						_ = windows.TerminateProcess(h, 0)
-						_ = windows.CloseHandle(h)
-					}
-				}
-			}
-			if err := windows.Process32Next(snapshot, &entry); err != nil {
-				break
-			}
-		}
-	}
-	time.Sleep(150 * time.Millisecond)
+	hSingleMutex = h
+	return true
 }
 
 func trimMemory() {
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	myPID := uint32(os.Getpid())
-	pids := append(getChildPIDs(myPID), myPID)
-
-	for _, pid := range pids {
-		h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_QUERY_INFORMATION, false, pid)
-		if err == nil {
-			_, _, _ = procEmptyWorkingSet.Call(uintptr(h))
-			_ = windows.CloseHandle(h)
-		}
+	hCur, err := windows.GetCurrentProcess()
+	if err == nil {
+		_, _, _ = procEmptyWorkingSet.Call(uintptr(hCur))
 	}
 }
 
 func main() {
-	// 0. Завершение зависших фоновых копий (защита от конфликтов портов и зависания)
-	killStaleInstances()
+	// 0. Защита от запуска дублирующих процессов через именованный системный мьютекс
+	if !acquireSingleInstance() {
+		logMessage("WARN", "Init", "LANForge is already running. Exiting duplicate process.")
+		return
+	}
+	defer func() {
+		if hSingleMutex != 0 {
+			_ = windows.CloseHandle(hSingleMutex)
+		}
+	}()
 
 	// 1. Ограничение ресурсов Go рантайма
 	runtime.GOMAXPROCS(2)
@@ -231,8 +159,7 @@ func main() {
 		if bindErr == nil {
 			break
 		}
-		logMessage("WARN", "Server", fmt.Sprintf("Port 8787 busy (attempt %d/5): %v. Terminating stale instances...", attempt+1, bindErr))
-		killStaleInstances()
+		logMessage("WARN", "Server", fmt.Sprintf("Port 8787 busy (attempt %d/5): %v. Retrying in 250ms...", attempt+1, bindErr))
 		time.Sleep(250 * time.Millisecond)
 	}
 	if bindErr != nil {
@@ -518,7 +445,6 @@ func main() {
 				r, _, _ := procIsWindow.Call(uintptr(hwnd))
 				if r == 0 {
 					logMessage("INFO", "App", "Window destroyed, terminating process")
-					killDescendants(uint32(os.Getpid()))
 					os.Exit(0)
 				}
 			}
@@ -529,7 +455,6 @@ func main() {
 	w.Run()
 
 	// Завершение работы
-	killDescendants(uint32(os.Getpid()))
 	logMessage("INFO", "App", "Application exited cleanly")
 	os.Exit(0)
 }

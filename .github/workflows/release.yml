@@ -27,9 +27,8 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "dist")) { New-Item -ItemType Directory -Force -Path "dist" }
-          go build -ldflags="-s -w -H=windowsgui" -o dist/LANForge.exe ./cmd/desktop
+          go build -ldflags="-H=windowsgui" -o dist/LANForge.exe ./cmd/desktop
           Copy-Item dist\LANForge.exe LANForge.exe -Force
-
 
       - name: Create Release Archive
         shell: pwsh
@@ -37,7 +36,8 @@ jobs:
           $version = "${{ github.ref_name }}"
           $zipName = "LANForge-$version-Windows-x64.zip"
           Copy-Item dist\LANForge.exe LANForge.exe -Force
-          Compress-Archive -Path "LANForge.exe", "release_readme.txt" -DestinationPath $zipName -Force
+          Copy-Item bin\steam-tunnel\steam_api64.dll steam_api64.dll -Force
+          Compress-Archive -Path "LANForge.exe", "steam_api64.dll", "release_readme.txt" -DestinationPath $zipName -Force
           Write-Host "Created $zipName successfully"
 
       - name: Publish GitHub Release
@@ -50,6 +50,7 @@ jobs:
           generate_release_notes: true
           files: |
             dist/LANForge.exe
+            bin/steam-tunnel/steam_api64.dll
             LANForge-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

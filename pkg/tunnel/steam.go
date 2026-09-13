@@ -5,8 +5,10 @@ package tunnel
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -259,7 +261,46 @@ func findSteamDLL() string {
 			return c
 		}
 	}
+
+	// Резервный вариант: если DLL отсутствует локально, скачиваем в %APPDATA%\LANForge
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		targetPath := filepath.Join(appData, "LANForge", "steam_api64.dll")
+		if err := downloadSteamDLL(targetPath); err == nil {
+			log.Printf("[Steam] Successfully downloaded steam_api64.dll to %s", targetPath)
+			return targetPath
+		}
+	}
+
 	return "steam_api64.dll"
+}
+
+func downloadSteamDLL(destPath string) error {
+	client := &http.Client{Timeout: 20 * time.Second}
+	url := "https://raw.githubusercontent.com/Mintflavored/LanForge/main/bin/steam-tunnel/steam_api64.dll"
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return err
+	}
+	tmpFile := destPath + ".tmp"
+	out, err := os.Create(tmpFile)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(out, resp.Body)
+	_ = out.Close()
+	if err != nil {
+		_ = os.Remove(tmpFile)
+		return err
+	}
+	return os.Rename(tmpFile, destPath)
 }
 
 func ensureAppID() {
