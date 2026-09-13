@@ -36,7 +36,7 @@ var embeddedHTML []byte
 var embeddedSteamDLL []byte
 
 var (
-	appVersion = "2.3.3"
+	appVersion = "2.3.4"
 
 	psapi               = syscall.NewLazyDLL("psapi.dll")
 	procEmptyWorkingSet = psapi.NewProc("EmptyWorkingSet")
@@ -48,6 +48,20 @@ var (
 
 	discordClient *discord.Client
 )
+
+type safeLogWriter struct {
+	file *os.File
+}
+
+func (w *safeLogWriter) Write(p []byte) (n int, err error) {
+	if os.Stderr != nil {
+		_, _ = os.Stderr.Write(p)
+	}
+	if w.file != nil {
+		return w.file.Write(p)
+	}
+	return len(p), nil
+}
 
 func init() {
 	appData := os.Getenv("APPDATA")
@@ -67,7 +81,7 @@ func init() {
 
 	// Направляем standard library log в lanforge.log для сохранения диагностики Steam P2P и туннелей
 	if lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-		log.SetOutput(io.MultiWriter(os.Stderr, lf))
+		log.SetOutput(&safeLogWriter{file: lf})
 	}
 }
 

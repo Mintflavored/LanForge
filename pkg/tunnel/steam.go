@@ -399,9 +399,13 @@ func (m *SteamManager) onConnectionStatusChanged(pInfo uintptr) {
 	}
 
 	var rtStatus SteamRealTimeStatus
-	m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&rtStatus)), 0, 0)
-	if rtStatus.Ping >= 0 {
-		m.lastPing.Store(rtStatus.Ping)
+	rRt, _, _ := m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&rtStatus)), 0, 0)
+	if rRt == 1 {
+		if rtStatus.Ping > 0 {
+			m.lastPing.Store(rtStatus.Ping)
+		} else if rtStatus.Ping == 0 {
+			m.lastPing.Store(1)
+		}
 	}
 
 	m.stateMu.RLock()
@@ -626,6 +630,7 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 	for {
 		n, err := sc.tcpConn.Read(buf)
 		if n > 0 {
+			retries := 0
 			for {
 				if sc.closed.Load() {
 					return
@@ -643,13 +648,15 @@ func (m *SteamManager) pipeTCPToSteam(sc *steamConn) {
 					m.BytesUp.Add(uint64(n))
 					break
 				}
-				if r == 25 {
-					// k_EResultLimitExceeded (buffer full): wait a moment for Steam SDR queue to drain
-					time.Sleep(2 * time.Millisecond)
+				// 25 = k_EResultLimitExceeded (buffer full), 17 = k_EResultInvalidState (handshake/re-route in progress)
+				if (r == 25 || r == 17) && retries < 500 {
+					retries++
+					backoff := time.Duration(1+(retries%10)) * time.Millisecond
+					time.Sleep(backoff)
 					continue
 				}
 				// Fatal send error
-				log.Printf("[Steam P2P] SendMessage fatal error on conn #%d: result=%d", sc.hConn, r)
+				log.Printf("[Steam P2P] SendMessage fatal error on conn #%d: result=%d (after %d retries)", sc.hConn, r, retries)
 				return
 			}
 		}
@@ -686,19 +693,23 @@ func (m *SteamManager) pumpLoop() {
 			hConn := sc.hConn
 
 			var status SteamRealTimeStatus
-			m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&status)), 0, 0)
-			if status.Ping >= 0 {
-				m.lastPing.Store(status.Ping)
-			}
+			rStatus, _, _ := m.procGetRealTime.Call(m.socketsPtr, uintptr(hConn), uintptr(unsafe.Pointer(&status)), 0, 0)
+			if rStatus == 1 {
+				if status.Ping > 0 {
+					m.lastPing.Store(status.Ping)
+				} else if status.Ping == 0 {
+					m.lastPing.Store(1)
+				}
 
-			if status.State == k_ESteamNetworkingConnectionState_ClosedByPeer ||
-				status.State == k_ESteamNetworkingConnectionState_ProblemDetectedLocally {
-				sc.close()
-				m.connsMu.Lock()
-				delete(m.activeConns, hConn)
-				m.connsMu.Unlock()
-				m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
-				continue
+				if status.State == k_ESteamNetworkingConnectionState_ClosedByPeer ||
+					status.State == k_ESteamNetworkingConnectionState_ProblemDetectedLocally {
+					sc.close()
+					m.connsMu.Lock()
+					delete(m.activeConns, hConn)
+					m.connsMu.Unlock()
+					m.procCloseConn.Call(m.socketsPtr, uintptr(hConn), 0, 0, 0)
+					continue
+				}
 			}
 
 			// Read up to 32 messages
@@ -783,9 +794,13 @@ func (m *SteamManager) stopClientLocked() {
 
 // GetStatus returns the current status, user profile, and friends list.
 func (m *SteamManager) GetStatus() SteamStatus {
+	currentPing := int(m.lastPing.Load())
+	if currentPing == 0 {
+		currentPing = 1
+	}
 	st := SteamStatus{
 		SteamRunning: m.IsSteamRunning(),
-		Ping:         int(m.lastPing.Load()),
+		Ping:         currentPing,
 		BytesUp:      m.BytesUp.Load(),
 		BytesDown:    m.BytesDown.Load(),
 	}

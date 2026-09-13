@@ -1764,7 +1764,8 @@
         case "pong":
           if (msg.clientTimestamp) {
             const rtt = Math.max(1, Date.now() - msg.clientTimestamp);
-            if (currentServerMode !== "steam") {
+            // В режиме Steam используем websocket ping как надежный fallback, пока нет прямого P2P замера
+            if (currentServerMode !== "steam" || !currentSteamState || currentSteamState.ping === undefined || currentSteamState.ping <= 0) {
               recordPingSample(rtt);
             }
           }
@@ -1827,6 +1828,9 @@
     }
 
     // TELEMETRY SPARKLINE & JITTER
+    let lastBroadcastPing = 0;
+    let lastBroadcastTime = 0;
+
     function recordPingSample(rtt) {
       pingHistory.push(rtt);
       if (pingHistory.length > 20) pingHistory.shift();
@@ -1835,14 +1839,17 @@
       for (let i = 1; i < pingHistory.length; i++) {
         sumDelta += Math.abs(pingHistory[i] - pingHistory[i - 1]);
       }
-      const jitter = (sumDelta / (pingHistory.length - 1)).toFixed(1);
+      const jitter = (sumDelta / Math.max(1, pingHistory.length - 1)).toFixed(1);
 
       const minPing = Math.min(...pingHistory);
       const maxPing = Math.max(...pingHistory);
 
-      document.getElementById("my-ping-lbl").innerText = rtt + " ms";
+      const pingStr = rtt < 1 ? "< 1 ms" : rtt + " ms";
+      const minMaxStr = (minPing < 1 && maxPing < 1) ? "< 1 ms" : `${minPing < 1 ? "< 1" : minPing} / ${maxPing} ms`;
+
+      document.getElementById("my-ping-lbl").innerText = pingStr;
       document.getElementById("my-jitter-lbl").innerText = "±" + jitter + " ms";
-      document.getElementById("metric-minmax").innerText = `${minPing} / ${maxPing} ms`;
+      document.getElementById("metric-minmax").innerText = minMaxStr;
 
       renderSparkline();
 
@@ -1857,6 +1864,20 @@
       } else {
         pingLbl.style.color = "var(--accent)";
         pathEl.setAttribute("stroke", "var(--accent)");
+      }
+
+      // Синхронизируем измеренный пинг с участниками комнаты
+      const now = Date.now();
+      if (currentRoom && ws && ws.readyState === WebSocket.OPEN) {
+        if (now - lastBroadcastTime >= 3000 || Math.abs(rtt - lastBroadcastPing) >= 15) {
+          lastBroadcastTime = now;
+          lastBroadcastPing = rtt;
+          sendWS({
+            type: "update_status",
+            pingMs: Math.max(1, rtt),
+            jitterMs: parseFloat(jitter) || 0
+          });
+        }
       }
     }
 
@@ -2652,17 +2673,17 @@
         }
 
         let steamPing = -1;
-        if (state.ping !== undefined && state.ping >= 0) {
+        if (state.ping !== undefined && state.ping > 0) {
           steamPing = state.ping;
-        } else if (state.connections && state.connections.length > 0 && state.connections[0].ping_ms >= 0) {
+        } else if (state.connections && state.connections.length > 0 && state.connections[0].ping_ms > 0) {
           steamPing = state.connections[0].ping_ms;
         }
 
         const steamPingEl = document.getElementById("steam-ping-val");
         if (steamPingEl) {
-          steamPingEl.textContent = steamPing >= 0 ? `${steamPing} мс` : "-- мс";
+          steamPingEl.textContent = steamPing > 0 ? `${steamPing} мс` : ((state.hosting || state.clientActive) ? "< 1 мс" : "-- мс");
         }
-        if (currentServerMode === "steam" && steamPing >= 0) {
+        if (currentServerMode === "steam" && steamPing > 0) {
           recordPingSample(steamPing);
         }
 
