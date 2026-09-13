@@ -1270,7 +1270,7 @@
       <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-dim);">
         <div style="display: flex; align-items: center; gap: 6px;">
           <span>Версия:</span>
-          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.3.1</span>
+          <span id="settings-version-label" style="font-family: var(--font-mono); font-weight: 700; color: var(--text-main); background: #18181c; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">v2.3.5</span>
         </div>
         <div>
           Разработано <span class="nervs-red" style="font-weight: 900; letter-spacing: 0.06em;">NERVS</span> • 2026
@@ -1365,9 +1365,13 @@
       detectNATAndRouting();
 
       // Listen for pywebview ready to load persistent native config
-      window.addEventListener("pywebviewready", () => {
+      if (window.pywebview && window.pywebview.api) {
         loadSavedConfig();
-      });
+      } else {
+        window.addEventListener("pywebviewready", () => {
+          loadSavedConfig();
+        });
+      }
 
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModals();
@@ -2426,6 +2430,14 @@
     }
 
     function openSettingsModal() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_app_version) {
+        window.pywebview.api.get_app_version().then(ver => {
+          if (ver) {
+            const s = document.getElementById("settings-version-label");
+            if (s) s.textContent = `v${ver}`;
+          }
+        }).catch(() => {});
+      }
       document.getElementById("settings-nick").value = myNick;
       document.getElementById("settings-server-mode").value = currentServerMode;
       document.getElementById("settings-custom-url").value = (currentServerMode === "custom") ? currentServerUrl : "";

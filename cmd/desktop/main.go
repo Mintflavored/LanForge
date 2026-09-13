@@ -414,6 +414,9 @@ func main() {
 			}
 		};
 		window.dispatchEvent(new Event("pywebviewready"));
+		document.addEventListener("DOMContentLoaded", () => {
+			window.dispatchEvent(new Event("pywebviewready"));
+		});
 	`
 	w.Init(polyfillJS)
 
