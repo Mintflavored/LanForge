@@ -15,18 +15,24 @@ import (
 
 // RoomManager manages all active rooms and connected peers.
 type RoomManager struct {
-	rooms       map[string]*Room
-	peers       map[string]*ConnectedPeer
-	tunnelConns map[string]*websocket.Conn
-	mu          sync.RWMutex
+	rooms         map[string]*Room
+	peers         map[string]*ConnectedPeer
+	tunnelConns   map[string]*websocket.Conn
+	userPresences map[string]*protocol.UserPresence
+	userPeers     map[string]*ConnectedPeer
+	userSubs      map[string]map[string]bool
+	mu            sync.RWMutex
 }
 
 // NewRoomManager creates a new RoomManager.
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
-		rooms:       make(map[string]*Room),
-		peers:       make(map[string]*ConnectedPeer),
-		tunnelConns: make(map[string]*websocket.Conn),
+		rooms:         make(map[string]*Room),
+		peers:         make(map[string]*ConnectedPeer),
+		tunnelConns:   make(map[string]*websocket.Conn),
+		userPresences: make(map[string]*protocol.UserPresence),
+		userPeers:     make(map[string]*ConnectedPeer),
+		userSubs:      make(map[string]map[string]bool),
 	}
 }
 
@@ -126,14 +132,53 @@ func (m *RoomManager) RebindPeerID(peer *ConnectedPeer, newID string) {
 	m.peers[newID] = peer
 }
 
-// UnregisterPeer removes a peer upon disconnect.
+func (m *RoomManager) notifySubscribersLocked(presence *protocol.UserPresence) []*ConnectedPeer {
+	if presence == nil || presence.UserID == "" {
+		return nil
+	}
+	var subscribers []*ConnectedPeer
+	if subs, ok := m.userSubs[presence.UserID]; ok {
+		for subUID := range subs {
+			if subPeer, found := m.userPeers[subUID]; found && subPeer != nil {
+				subscribers = append(subscribers, subPeer)
+			}
+		}
+	}
+	return subscribers
+}
+
+// UnregisterPeer removes a peer upon disconnect and notifies presence subscribers.
 func (m *RoomManager) UnregisterPeer(peerID string) {
 	m.mu.Lock()
 	peer, exists := m.peers[peerID]
+	var subscribers []*ConnectedPeer
+	var offlinePresence *protocol.UserPresence
+
 	if exists {
 		delete(m.peers, peerID)
+		if peer.UserID != "" {
+			if curr, ok := m.userPeers[peer.UserID]; ok && curr == peer {
+				delete(m.userPeers, peer.UserID)
+				if p, ok := m.userPresences[peer.UserID]; ok && p != nil {
+					p.Status = "offline"
+					p.LastSeen = time.Now().UnixMilli()
+					offlinePresence = p
+					subscribers = m.notifySubscribersLocked(p)
+				}
+			}
+		}
 	}
 	m.mu.Unlock()
+
+	if offlinePresence != nil && len(subscribers) > 0 {
+		offlineMsg := protocol.ServerMessage{
+			Type:     "presence_update",
+			Presence: offlinePresence,
+		}
+		for _, sub := range subscribers {
+			_ = sub.SendJSON(offlineMsg)
+		}
+	}
 
 	if exists && peer.RoomCode != "" {
 		m.LeaveRoom(peer)
@@ -181,6 +226,8 @@ func (m *RoomManager) CreateRoom(peer *ConnectedPeer, name, gamePreset, password
 	m.mu.Lock()
 	m.rooms[code] = room
 	m.mu.Unlock()
+
+	m.syncPresenceRoomStatus(peer, "in_game", code, gamePreset)
 
 	return room.ToState(), peer.State, nil
 }
@@ -256,6 +303,8 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password, peerID
 				Peer: &existingPeer.State,
 			}, "")
 
+			m.syncPresenceRoomStatus(existingPeer, "in_game", room.Code, room.GamePreset)
+
 			return room.ToState(), existingPeer, nil
 		}
 	}
@@ -305,6 +354,8 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password, peerID
 		Type: "peer_joined",
 		Peer: &peer.State,
 	}, peer.ID)
+
+	m.syncPresenceRoomStatus(peer, "in_game", room.Code, room.GamePreset)
 
 	return room.ToState(), peer, nil
 }
@@ -459,6 +510,7 @@ func (m *RoomManager) LeaveRoom(peer *ConnectedPeer) {
 			}, "")
 		}
 	}
+	m.syncPresenceRoomStatus(peer, "online", "", "")
 }
 
 // GetRoom retrieves a room by code.
@@ -494,4 +546,115 @@ func (m *RoomManager) BroadcastAll(msg protocol.ServerMessage) {
 	for _, p := range peers {
 		_ = p.SendJSON(msg)
 	}
+}
+
+func (m *RoomManager) syncPresenceRoomStatus(peer *ConnectedPeer, status, roomCode, game string) {
+	if peer == nil || peer.UserID == "" {
+		return
+	}
+	m.mu.Lock()
+	var subs []*ConnectedPeer
+	var pCopy *protocol.UserPresence
+	if p, ok := m.userPresences[peer.UserID]; ok && p != nil {
+		p.Status = status
+		p.RoomCode = roomCode
+		if game != "" {
+			p.Game = game
+		}
+		p.LastSeen = time.Now().UnixMilli()
+		cp := *p
+		pCopy = &cp
+		subs = m.notifySubscribersLocked(&cp)
+	}
+	m.mu.Unlock()
+
+	if pCopy != nil && len(subs) > 0 {
+		updateMsg := protocol.ServerMessage{
+			Type:     "presence_update",
+			Presence: pCopy,
+		}
+		for _, sub := range subs {
+			if sub != peer {
+				_ = sub.SendJSON(updateMsg)
+			}
+		}
+	}
+}
+
+// AnnouncePresence registers or updates the user's presence and subscriptions, returning the snapshot of online friends.
+func (m *RoomManager) AnnouncePresence(peer *ConnectedPeer, presence protocol.UserPresence, friendIDs []string) []protocol.UserPresence {
+	m.mu.Lock()
+	if presence.UserID == "" {
+		m.mu.Unlock()
+		return nil
+	}
+	peer.UserID = presence.UserID
+	presence.LastSeen = time.Now().UnixMilli()
+	if presence.Status == "" {
+		if peer.RoomCode != "" {
+			presence.Status = "in_game"
+			presence.RoomCode = peer.RoomCode
+		} else {
+			presence.Status = "online"
+		}
+	}
+
+	pCopy := presence
+	m.userPresences[presence.UserID] = &pCopy
+	m.userPeers[presence.UserID] = peer
+
+	// Update friend subscriptions
+	for _, fID := range friendIDs {
+		fID = strings.TrimSpace(fID)
+		if fID == "" || fID == presence.UserID {
+			continue
+		}
+		if m.userSubs[fID] == nil {
+			m.userSubs[fID] = make(map[string]bool)
+		}
+		m.userSubs[fID][presence.UserID] = true
+	}
+
+	// Prepare snapshot of online friends
+	var snapshot []protocol.UserPresence
+	for _, fID := range friendIDs {
+		fID = strings.TrimSpace(fID)
+		if p, ok := m.userPresences[fID]; ok && p != nil && p.Status != "offline" {
+			snapshot = append(snapshot, *p)
+		}
+	}
+
+	subscribers := m.notifySubscribersLocked(&pCopy)
+	m.mu.Unlock()
+
+	// Notify subscribers
+	updateMsg := protocol.ServerMessage{
+		Type:     "presence_update",
+		Presence: &pCopy,
+	}
+	for _, sub := range subscribers {
+		if sub != peer {
+			_ = sub.SendJSON(updateMsg)
+		}
+	}
+
+	return snapshot
+}
+
+// SendFriendInvite sends a game invite directly to the target friend if they are currently online.
+func (m *RoomManager) SendFriendInvite(fromPeer *ConnectedPeer, invite protocol.FriendInvite, targetUserID string) error {
+	m.mu.RLock()
+	targetPeer, ok := m.userPeers[targetUserID]
+	m.mu.RUnlock()
+
+	if !ok || targetPeer == nil {
+		return fmt.Errorf("пользователь %s не в сети", targetUserID)
+	}
+
+	invite.Timestamp = time.Now().UnixMilli()
+	msg := protocol.ServerMessage{
+		Type:   "incoming_invite",
+		Invite: &invite,
+	}
+	return targetPeer.SendJSON(msg)
 }

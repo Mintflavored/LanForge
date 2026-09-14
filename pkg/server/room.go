@@ -12,6 +12,7 @@ import (
 // ConnectedPeer represents an active WebSocket connection of a player.
 type ConnectedPeer struct {
 	ID             string
+	UserID         string
 	Conn           *websocket.Conn
 	ConnGen        uint64
 	SessionToken   string

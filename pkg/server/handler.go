@@ -646,6 +646,88 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 			})
 		}()
 
+	case "presence_announce":
+		presence := protocol.UserPresence{
+			UserID:   msg.UserID,
+			Nick:     msg.Nick,
+			Status:   msg.Status,
+			Game:     msg.Game,
+			RoomCode: msg.Code,
+		}
+		if presence.Nick == "" {
+			presence.Nick = peer.State.Nick
+		}
+		if peer.RoomCode != "" {
+			presence.RoomCode = peer.RoomCode
+			presence.Status = "in_game"
+		}
+		snapshot := s.Manager.AnnouncePresence(peer, presence, msg.FriendIDs)
+		_ = peer.SendJSON(protocol.ServerMessage{
+			Type:      "presence_snapshot",
+			Presences: snapshot,
+		})
+		return peer
+
+	case "presence_update":
+		if msg.UserID != "" {
+			presence := protocol.UserPresence{
+				UserID:   msg.UserID,
+				Nick:     msg.Nick,
+				Status:   msg.Status,
+				Game:     msg.Game,
+				RoomCode: msg.Code,
+			}
+			snapshot := s.Manager.AnnouncePresence(peer, presence, msg.FriendIDs)
+			if len(msg.FriendIDs) > 0 {
+				_ = peer.SendJSON(protocol.ServerMessage{
+					Type:      "presence_snapshot",
+					Presences: snapshot,
+				})
+			}
+		}
+		return peer
+
+	case "friend_invite":
+		if msg.TargetUserID == "" {
+			_ = peer.SendJSON(protocol.ServerMessage{
+				Type:         "error",
+				Code:         "INVALID_INVITE",
+				ErrorMessage: "Не указан получатель приглашения",
+			})
+			return peer
+		}
+		fromNick := msg.FromNick
+		if fromNick == "" {
+			fromNick = peer.State.Nick
+		}
+		fromUID := msg.FromUserID
+		if fromUID == "" {
+			fromUID = peer.UserID
+		}
+		roomCode := msg.Code
+		if roomCode == "" {
+			roomCode = peer.RoomCode
+		}
+		invite := protocol.FriendInvite{
+			FromUserID: fromUID,
+			FromNick:   fromNick,
+			RoomCode:   roomCode,
+			Game:       msg.Game,
+		}
+		if err := s.Manager.SendFriendInvite(peer, invite, msg.TargetUserID); err != nil {
+			_ = peer.SendJSON(protocol.ServerMessage{
+				Type:         "error",
+				Code:         "INVITE_FAILED",
+				ErrorMessage: err.Error(),
+			})
+		} else {
+			_ = peer.SendJSON(protocol.ServerMessage{
+				Type:         "invite_sent",
+				TargetUserID: msg.TargetUserID,
+			})
+		}
+		return peer
+
 	case "ping":
 		_ = peer.SendJSON(protocol.ServerMessage{
 			Type:            "pong",

@@ -699,6 +699,124 @@
       background: var(--accent);
       box-shadow: 0 0 6px rgba(255, 85, 0, 0.6);
     }
+
+    /* FRIENDS PANEL & INVITE BANNER */
+    .friends-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 12px;
+      flex: 1;
+      height: calc(100% - 75px);
+      min-height: 0;
+    }
+    .profile-banner {
+      background: linear-gradient(135deg, rgba(255, 85, 0, 0.08) 0%, rgba(18, 18, 21, 0.95) 100%);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .profile-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .profile-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #ff5500, #ff8533);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 15px;
+      box-shadow: 0 2px 8px rgba(255, 85, 0, 0.3);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .profile-avatar .status-dot {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      border: 2px solid var(--bg);
+    }
+    .friend-card {
+      background: #151519;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      transition: all 0.15s ease;
+      margin-bottom: 6px;
+    }
+    .friend-card:hover {
+      background: #1a1a20;
+      border-color: var(--border-focus);
+      transform: translateY(-1px);
+    }
+    .friend-info {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+    .friend-name {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .friend-status {
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    .friend-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .invite-banner-overlay {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      animation: slideDownFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideDownFade {
+      from { opacity: 0; transform: translate(-50%, -20px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .invite-box {
+      background: rgba(18, 18, 24, 0.97);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--accent);
+      box-shadow: 0 8px 30px rgba(255, 85, 0, 0.28), 0 0 0 1px rgba(255, 85, 0, 0.2);
+      border-radius: 12px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 360px;
+      max-width: 480px;
+    }
   </style>
 </head>
 <body>
@@ -788,6 +906,26 @@
   <!-- TOAST NOTIFICATIONS -->
   <div id="toast-container"></div>
 
+  <!-- INCOMING GAME INVITE BANNER -->
+  <div id="incoming-invite-banner" class="invite-banner-overlay" style="display: none;">
+    <div class="invite-box">
+      <div class="profile-avatar" style="width: 38px; height: 38px; font-size: 18px;">
+        🎮
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+          <span style="font-size: 10.5px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase;">ПРИГЛАШЕНИЕ В ИГРУ</span>
+        </div>
+        <div style="font-size: 13px; font-weight: 700; color: #fff;" id="invite-banner-text">Игрок зовет вас в игру</div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-top: 1px;">Комната: <span id="invite-banner-room" style="color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">LAN-XXXX</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="btn btn-secondary btn-sm" onclick="rejectIncomingInvite()">Отклонить</button>
+        <button class="btn btn-primary btn-sm" onclick="acceptIncomingInvite()">Войти</button>
+      </div>
+    </div>
+  </div>
+
   <!-- HEADER -->
   <header>
     <div class="brand">
@@ -823,6 +961,11 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Чат
         <span id="chat-unread-dot" style="display:none; width:6px; height:6px; background:var(--accent); border-radius:50%; margin-left:4px; box-shadow:0 0 6px var(--accent);"></span>
+      </button>
+      <button class="nav-btn" id="nav-btn-friends" onclick="switchTab('friends')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Друзья
+        <span id="friends-online-badge" style="display:none; font-size:10px; background:rgba(34,197,94,0.18); color:var(--green); padding:1px 6px; border-radius:10px; font-weight:700; border:1px solid rgba(34,197,94,0.35); margin-left:3px;">0</span>
       </button>
       <button class="nav-btn" id="nav-btn-diag" onclick="switchTab('diag')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -877,6 +1020,10 @@
                 <button class="btn btn-secondary btn-sm" id="room-code-btn" onclick="copyRoomCode()">
                   <span id="room-code-val">LAN-XXXX</span>
                   <svg class="ui-icon ui-icon-sm"><use href="#icon-copy"></use></svg>
+                </button>
+                <button class="btn btn-secondary btn-sm" id="discord-invite-btn" title="Скопировать приглашение для Discord" onclick="copyDiscordInvite()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                  Discord инвайт
                 </button>
               </div>
               <button class="btn btn-secondary btn-sm" style="color: var(--red);" onclick="leaveRoom()">Отключиться</button>
@@ -1180,6 +1327,68 @@
         <div class="stun-matrix-grid" id="stun-matrix-container"></div>
       </div>
     </section>
+
+    <!-- 6. ZERO-DB FRIENDS & RECENT PLAYERS PANEL -->
+    <section id="view-friends" class="view-pane">
+      <!-- USER PROFILE & FRIEND CODE BANNER -->
+      <div class="profile-banner">
+        <div class="profile-left">
+          <div class="profile-avatar">
+            <span id="profile-avatar-letter">P</span>
+            <span class="status-dot online"></span>
+          </div>
+          <div>
+            <div style="font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;">
+              <span id="profile-nick-display">Player</span>
+              <span class="p2p-badge p2p-badge-direct" style="font-size: 9.5px; padding: 1px 5px;">В СЕТИ</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+              <span>Мой ID:</span>
+              <span id="my-profile-user-id" style="font-family: var(--font-mono); font-weight: 700; color: var(--accent);">usr_...</span>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px;" onclick="copyMyUserId()">
+                <svg class="ui-icon ui-icon-sm"><use href="#icon-copy"></use></svg>
+                Копировать
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="text" id="add-friend-id-input" class="input-field" placeholder="ID друга (usr_...)" style="width: 170px; padding: 6px 10px; font-size: 11.5px; font-family: var(--font-mono); margin: 0;" onkeydown="if(event.key==='Enter') addFriendById()">
+          <button class="btn btn-primary btn-sm" onclick="addFriendById()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Добавить
+          </button>
+        </div>
+      </div>
+
+      <!-- TWO COLUMNS: FRIENDS LIST (LEFT) & RECENTS (RIGHT) -->
+      <div class="friends-grid">
+        <!-- LEFT: FRIENDS LIST -->
+        <div class="card" style="padding: 12px 14px; display: flex; flex-direction: column; min-height: 0;">
+          <div class="card-title-badge" style="justify-content: space-between; margin-bottom: 8px;">
+            <span>МОИ ДРУЗЬЯ</span>
+            <span id="friends-count-label" style="font-size: 10px; color: var(--text-dim);">0 друзей</span>
+          </div>
+
+          <div id="friends-list-container" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- RIGHT: RECENT PLAYERS -->
+        <div class="card" style="padding: 12px 14px; display: flex; flex-direction: column; min-height: 0;">
+          <div class="card-title-badge" style="justify-content: space-between; margin-bottom: 8px;">
+            <span>НЕДАВНИЕ ИГРОКИ</span>
+            <span id="recents-count-label" style="font-size: 10px; color: var(--text-dim);">0 игроков</span>
+          </div>
+
+          <div id="recent-players-container" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- CREATE ROOM MODAL -->
@@ -1355,11 +1564,30 @@
     let discoveredGames = [];
     let currentTab = "overview";
 
+    // FRIENDS & RECENT PLAYERS STATE
+    let myUserId = localStorage.getItem("lanforge_user_id") || "";
+    if (!myUserId) {
+      myUserId = "usr_" + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem("lanforge_user_id", myUserId);
+    }
+    let friendsList = [];
+    try {
+      friendsList = JSON.parse(localStorage.getItem("lanforge_friends") || "[]");
+    } catch(e) { friendsList = []; }
+    let recentPlayers = [];
+    try {
+      recentPlayers = JSON.parse(localStorage.getItem("lanforge_recents") || "[]");
+    } catch(e) { recentPlayers = []; }
+    let friendsPresence = {};
+    let pendingInvite = null;
+    let inviteTimer = null;
+
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
       Logger.info("Init", `DOM loaded. Current Nick: ${myNick}, Mode: ${currentServerMode}, Server: ${currentServerUrl}`);
       renderPresets();
       renderStunMatrix();
+      renderFriendsUI();
       connectWebSocket(currentServerUrl);
       checkUPnPStatus();
       detectNATAndRouting();
@@ -1419,6 +1647,20 @@
                 connectWebSocket(currentServerUrl);
               }
             }
+            if (cfg.userId) {
+              myUserId = cfg.userId;
+              localStorage.setItem("lanforge_user_id", myUserId);
+            }
+            if (Array.isArray(cfg.friends)) {
+              friendsList = cfg.friends;
+              localStorage.setItem("lanforge_friends", JSON.stringify(friendsList));
+            }
+            if (Array.isArray(cfg.recents)) {
+              recentPlayers = cfg.recents;
+              localStorage.setItem("lanforge_recents", JSON.stringify(recentPlayers));
+            }
+            renderFriendsUI();
+            sendPresenceAnnounce();
             console.log("[Config] Loaded persistent config:", cfg);
           }
         }).catch(err => console.warn("[Config Error]", err));
@@ -1463,6 +1705,7 @@
         Logger.info("WS", `Successfully connected to: ${currentServerUrl}`);
         startPingHeartbeat();
         updateConnectionStatus(true);
+        sendPresenceAnnounce();
 
         // If client had an active room session, re-sync with the server
         if (currentRoom && currentRoom.code) {
@@ -1669,6 +1912,10 @@
             showToast("Связь с комнатой восстановлена");
           }
           syncNativePresence();
+          sendPresenceAnnounce();
+          if (currentRoom && currentRoom.peers) {
+            currentRoom.peers.forEach(p => recordRecentPeer(p));
+          }
           if (currentRoom && currentRoom.hostId === myId) {
             refreshSteamStatus();
             setTimeout(broadcastSteamHostInfo, 800);
@@ -1683,6 +1930,7 @@
             updateRoomUI();
             playSound("join");
             syncNativePresence();
+            recordRecentPeer(msg.peer);
             showToast(`Игрок ${msg.peer.nick} подключился`);
             notifyNative("LANForge", `Игрок ${msg.peer.nick} подключился`);
             if (currentRoom && currentRoom.hostId === myId) {
@@ -1814,8 +2062,33 @@
               }
             }
           }
+        case "presence_snapshot":
+          if (Array.isArray(msg.presences)) {
+            msg.presences.forEach(p => {
+              if (p && p.userId) {
+                friendsPresence[p.userId] = p;
+              }
+            });
+            renderFriendsUI();
+          }
           break;
 
+        case "presence_update":
+          if (msg.presence && msg.presence.userId) {
+            friendsPresence[msg.presence.userId] = msg.presence;
+            renderFriendsUI();
+          }
+          break;
+
+        case "incoming_invite":
+          if (msg.invite) {
+            showIncomingInvite(msg.invite);
+          }
+          break;
+
+        case "invite_sent":
+          showToast("Приглашение отправлено!");
+          break;
 
         case "error":
           if (msg.code === "JOIN_ROOM_FAILED" && currentRoom) {
@@ -2010,6 +2283,11 @@
       if (tabId === "diag") {
         checkUPnPStatus();
         detectNATAndRouting();
+      }
+
+      if (tabId === "friends") {
+        renderFriendsUI();
+        sendPresenceAnnounce();
       }
 
       if (tabId === "chat") {
@@ -2825,6 +3103,7 @@
       updateRoomUI();
       playSound("leave");
       syncNativePresence();
+      sendPresenceAnnounce();
       showToast("Вы вышли из комнаты");
     }
 
@@ -2840,6 +3119,17 @@
           }
         }, 1200);
       }
+    }
+
+    function copyDiscordInvite() {
+      if (!currentRoom || !currentRoom.code) {
+        showToast("Вы не находитесь в комнате");
+        return;
+      }
+      const game = currentRoom.gamePreset || "LAN Party";
+      const text = `🎮 LANForge: Присоединяйся ко мне в ${game}! Код комнаты: ${currentRoom.code} | Скачать: https://github.com/Mintflavored/LanForge`;
+      copyText(text);
+      showToast("Приглашение для Discord скопировано!");
     }
 
     function copyMyIp() {
@@ -2903,6 +3193,361 @@
         toast.style.transform = "translateY(-10px)";
         setTimeout(() => toast.remove(), 200);
       }, 2200);
+    }
+    // ZERO-DB FRIENDS & RECENT PLAYERS IMPLEMENTATION
+    function sendPresenceAnnounce() {
+      if (!myUserId) {
+        myUserId = localStorage.getItem("lanforge_user_id") || ("usr_" + Math.random().toString(36).substring(2, 10));
+        localStorage.setItem("lanforge_user_id", myUserId);
+      }
+      const friendIds = friendsList.map(f => f.id).filter(Boolean);
+      sendWS({
+        type: "presence_announce",
+        userId: myUserId,
+        nick: myNick || "Player",
+        status: currentRoom ? "in_game" : "online",
+        game: (currentRoom && currentRoom.gamePreset) || "",
+        code: (currentRoom && currentRoom.code) || "",
+        friendIds: friendIds
+      });
+    }
+
+    function saveFriendsAndRecents() {
+      localStorage.setItem("lanforge_friends", JSON.stringify(friendsList));
+      localStorage.setItem("lanforge_recents", JSON.stringify(recentPlayers));
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_config) {
+        window.pywebview.api.get_config().then(cfg => {
+          cfg = (typeof cfg === "object" && cfg) ? cfg : {};
+          cfg.userId = myUserId;
+          cfg.friends = friendsList;
+          cfg.recents = recentPlayers;
+          window.pywebview.api.save_config(cfg);
+        }).catch(() => {});
+      }
+    }
+
+    function recordRecentPeer(peer) {
+      if (!peer || !peer.id) return;
+      const pId = peer.userId || peer.id;
+      if (pId === myId || pId === myUserId) return;
+      const pNick = peer.nick || "Player";
+      const game = (currentRoom && currentRoom.gamePreset) || "LAN Game";
+
+      const idx = recentPlayers.findIndex(r => r.id === pId);
+      if (idx >= 0) {
+        recentPlayers[idx].nick = pNick;
+        recentPlayers[idx].lastSeen = Date.now();
+        recentPlayers[idx].game = game;
+      } else {
+        recentPlayers.unshift({
+          id: pId,
+          nick: pNick,
+          lastSeen: Date.now(),
+          game: game
+        });
+        if (recentPlayers.length > 20) {
+          recentPlayers = recentPlayers.slice(0, 20);
+        }
+      }
+      saveFriendsAndRecents();
+      renderFriendsUI();
+    }
+
+    function addFriendById() {
+      const input = document.getElementById("add-friend-id-input");
+      if (!input) return;
+      const val = input.value.trim();
+      if (!val) {
+        showToast("Введите ID друга (usr_...)");
+        return;
+      }
+      if (val === myUserId) {
+        showToast("Нельзя добавить самого себя");
+        return;
+      }
+      if (friendsList.some(f => f.id === val)) {
+        showToast("Этот друг уже есть в вашем списке");
+        return;
+      }
+      const fromRecent = recentPlayers.find(r => r.id === val);
+      const nick = fromRecent ? fromRecent.nick : ("Друг " + val.slice(-4));
+      
+      friendsList.push({
+        id: val,
+        nick: nick,
+        addedAt: Date.now()
+      });
+      input.value = "";
+      saveFriendsAndRecents();
+      sendPresenceAnnounce();
+      renderFriendsUI();
+      showToast(`Друг ${nick} добавлен!`);
+    }
+
+    function addFriend(id, nick) {
+      if (!id) return;
+      if (id === myUserId) {
+        showToast("Нельзя добавить самого себя");
+        return;
+      }
+      if (friendsList.some(f => f.id === id)) {
+        showToast("Этот друг уже в списке");
+        return;
+      }
+      friendsList.push({
+        id: id,
+        nick: nick || ("Друг " + id.slice(-4)),
+        addedAt: Date.now()
+      });
+      saveFriendsAndRecents();
+      sendPresenceAnnounce();
+      renderFriendsUI();
+      showToast(`Игрок ${nick} добавлен в друзья!`);
+    }
+
+    function removeFriend(id) {
+      friendsList = friendsList.filter(f => f.id !== id);
+      delete friendsPresence[id];
+      saveFriendsAndRecents();
+      sendPresenceAnnounce();
+      renderFriendsUI();
+      showToast("Друг удален из списка");
+    }
+
+    function sendFriendInvite(targetUserId) {
+      if (!currentRoom || !currentRoom.code) {
+        showToast("Вы не в комнате! Сначала создайте или войдите в комнату");
+        return;
+      }
+      const game = currentRoom.gamePreset || "LAN Party";
+      sendWS({
+        type: "friend_invite",
+        targetUserId: targetUserId,
+        fromUserId: myUserId,
+        fromNick: myNick,
+        code: currentRoom.code,
+        game: game
+      }, true);
+      showToast("Приглашение отправлено!");
+    }
+
+    function showIncomingInvite(invite) {
+      if (!invite) return;
+      pendingInvite = invite;
+
+      const banner = document.getElementById("incoming-invite-banner");
+      const txt = document.getElementById("invite-banner-text");
+      const roomLbl = document.getElementById("invite-banner-room");
+
+      if (txt) {
+        const game = invite.game ? `в ${invite.game}` : "в игру";
+        txt.innerHTML = `<strong>${escapeHtml(invite.fromNick || "Друг")}</strong> приглашает вас ${escapeHtml(game)}!`;
+      }
+      if (roomLbl) {
+        roomLbl.textContent = invite.roomCode || "LAN-XXXX";
+      }
+
+      if (banner) {
+        banner.style.display = "block";
+      }
+
+      playSound("create");
+      notifyNative("Приглашение в игру!", `${invite.fromNick || 'Друг'} приглашает вас в игру (Комната: ${invite.roomCode})`);
+
+      if (inviteTimer) clearTimeout(inviteTimer);
+      inviteTimer = setTimeout(() => {
+        rejectIncomingInvite();
+      }, 30000);
+    }
+
+    function acceptIncomingInvite() {
+      if (!pendingInvite) return;
+      const code = pendingInvite.roomCode;
+      rejectIncomingInvite();
+      if (code) {
+        showToast("Подключение к комнате друга: " + code);
+        joinRoomWithCode(code);
+      }
+    }
+
+    function rejectIncomingInvite() {
+      pendingInvite = null;
+      if (inviteTimer) {
+        clearTimeout(inviteTimer);
+        inviteTimer = null;
+      }
+      const banner = document.getElementById("incoming-invite-banner");
+      if (banner) banner.style.display = "none";
+    }
+
+    function joinRoomWithCode(code) {
+      if (!code) return;
+      const norm = code.trim().toUpperCase();
+      Logger.info("Action", `Joining room by code: "${norm}", nick: ${myNick}`);
+      sendWS({
+        type: "join_room",
+        code: norm,
+        nick: myNick || "Player"
+      }, true);
+    }
+
+    function copyMyUserId() {
+      if (!myUserId) return;
+      copyText(myUserId);
+      showToast("Ваш ID скопирован: " + myUserId);
+    }
+
+    function formatTimeAgo(ts) {
+      const diff = Date.now() - ts;
+      if (diff < 60000) return "только что";
+      if (diff < 3600000) return `${Math.floor(diff / 60000)} мин назад`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)} ч назад`;
+      return `${Math.floor(diff / 86400000)} дн назад`;
+    }
+
+    function renderFriendsUI() {
+      // Profile Header Card
+      const nickEl = document.getElementById("profile-nick-display");
+      if (nickEl) nickEl.textContent = myNick || "Player";
+      const avatarLetter = document.getElementById("profile-avatar-letter");
+      if (avatarLetter) avatarLetter.textContent = (myNick && myNick.length > 0) ? myNick[0].toUpperCase() : "P";
+      const uidEl = document.getElementById("my-profile-user-id");
+      if (uidEl) uidEl.textContent = myUserId || "usr_...";
+
+      // Online Friends Count
+      let onlineCount = 0;
+      friendsList.forEach(f => {
+        const p = friendsPresence[f.id];
+        if (p && p.status && p.status !== "offline") {
+          onlineCount++;
+        }
+      });
+
+      const badge = document.getElementById("friends-online-badge");
+      if (badge) {
+        if (onlineCount > 0) {
+          badge.textContent = onlineCount;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+
+      const countLbl = document.getElementById("friends-count-label");
+      if (countLbl) {
+        countLbl.textContent = `${friendsList.length} друзей (${onlineCount} в сети)`;
+      }
+
+      // Render Friends List
+      const fContainer = document.getElementById("friends-list-container");
+      if (fContainer) {
+        if (friendsList.length === 0) {
+          fContainer.innerHTML = `
+            <div style="text-align: center; padding: 36px 16px; color: var(--text-dim);">
+              <div style="font-size: 32px; margin-bottom: 8px; opacity: 0.6;">👥</div>
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Список друзей пуст</div>
+              <div style="font-size: 11px; line-height: 1.5; max-width: 260px; margin: 0 auto;">
+                Отправьте свой ID друзьям или добавьте игроков из раздела «Недавние игроки» справа.
+              </div>
+            </div>`;
+        } else {
+          const sorted = [...friendsList].sort((a, b) => {
+            const pa = friendsPresence[a.id];
+            const pb = friendsPresence[b.id];
+            const sa = (pa && pa.status && pa.status !== "offline") ? 1 : 0;
+            const sb = (pb && pb.status && pb.status !== "offline") ? 1 : 0;
+            return sb - sa;
+          });
+
+          fContainer.innerHTML = sorted.map(f => {
+            const p = friendsPresence[f.id];
+            const isOnline = (p && p.status && p.status !== "offline");
+            const isInGame = (p && p.status === "in_game");
+            const statusClass = isOnline ? "online" : "offline";
+            
+            let statusText = "Не в сети";
+            if (isInGame) {
+              statusText = `<span style="color:var(--green); font-weight:600;">В игре: ${escapeHtml(p.game || 'LAN')}</span> <span style="color:var(--text-dim);">(${escapeHtml(p.roomCode || '')})</span>`;
+            } else if (isOnline) {
+              statusText = `<span style="color:var(--green);">В сети (в меню)</span>`;
+            }
+
+            const canInvite = isOnline && currentRoom && currentRoom.code;
+            const canJoinFriend = isInGame && p.roomCode && (!currentRoom || currentRoom.code !== p.roomCode);
+
+            return `
+              <div class="friend-card">
+                <div class="friend-info">
+                  <div class="profile-avatar" style="width: 28px; height: 28px; font-size: 12px; background: #23232c;">
+                    ${escapeHtml((f.nick && f.nick[0]) ? f.nick[0].toUpperCase() : "U")}
+                    <span class="status-dot ${statusClass}"></span>
+                  </div>
+                  <div class="friend-text">
+                    <div class="friend-name">
+                      ${escapeHtml(f.nick || f.id)}
+                      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(f.id)}</span>
+                    </div>
+                    <div class="friend-status">${statusText}</div>
+                  </div>
+                </div>
+                <div class="friend-actions">
+                  ${canInvite ? `<button class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="sendFriendInvite('${escapeHtml(f.id)}')">Позвать</button>` : ''}
+                  ${canJoinFriend ? `<button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; color:var(--green);" onclick="joinRoomWithCode('${escapeHtml(p.roomCode)}')">Войти</button>` : ''}
+                  <button class="btn-icon" style="width: 26px; height: 26px; font-size: 12px; color: var(--text-dim);" title="Удалить из друзей" onclick="removeFriend('${escapeHtml(f.id)}')">✕</button>
+                </div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
+      // Render Recent Players List
+      const rContainer = document.getElementById("recent-players-container");
+      const rCountLbl = document.getElementById("recents-count-label");
+      if (rCountLbl) {
+        rCountLbl.textContent = `${recentPlayers.length} игроков`;
+      }
+
+      if (rContainer) {
+        if (recentPlayers.length === 0) {
+          rContainer.innerHTML = `
+            <div style="text-align: center; padding: 36px 16px; color: var(--text-dim);">
+              <div style="font-size: 32px; margin-bottom: 8px; opacity: 0.6;">🕹️</div>
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">История пуста</div>
+              <div style="font-size: 11px; line-height: 1.5; max-width: 240px; margin: 0 auto;">
+                Здесь появятся игроки, с которыми вы играли в одной комнате.
+              </div>
+            </div>`;
+        } else {
+          rContainer.innerHTML = recentPlayers.map(r => {
+            const isAlreadyFriend = friendsList.some(f => f.id === r.id);
+            const timeAgo = r.lastSeen ? formatTimeAgo(r.lastSeen) : "";
+            return `
+              <div class="friend-card">
+                <div class="friend-info">
+                  <div class="profile-avatar" style="width: 28px; height: 28px; font-size: 12px; background: #23232c;">
+                    ${escapeHtml((r.nick && r.nick[0]) ? r.nick[0].toUpperCase() : "P")}
+                  </div>
+                  <div class="friend-text">
+                    <div class="friend-name">
+                      ${escapeHtml(r.nick || r.id)}
+                      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(r.id)}</span>
+                    </div>
+                    <div class="friend-status">${escapeHtml(r.game || 'LAN')} • ${timeAgo}</div>
+                  </div>
+                </div>
+                <div class="friend-actions">
+                  ${isAlreadyFriend ? `
+                    <span style="font-size: 10.5px; color: var(--green); font-weight: 600; padding: 2px 6px;">В друзьях</span>
+                  ` : `
+                    <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="addFriend('${escapeHtml(r.id)}', '${escapeHtml(r.nick)}')">+ В друзья</button>
+                  `}
+                </div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
     }
   </script>
 </body>

@@ -46,6 +46,26 @@ type ChatMessage struct {
 	Timestamp  int64  `json:"timestamp"`
 }
 
+// UserPresence represents the online presence and activity of a LANForge user.
+type UserPresence struct {
+	UserID   string `json:"userId"`
+	Nick     string `json:"nick"`
+	Status   string `json:"status"` // "online", "in_game", "offline"
+	Game     string `json:"game,omitempty"`
+	RoomCode string `json:"roomCode,omitempty"`
+	SteamID  string `json:"steamId,omitempty"`
+	LastSeen int64  `json:"lastSeen,omitempty"`
+}
+
+// FriendInvite represents a direct game invitation from a friend.
+type FriendInvite struct {
+	FromUserID string `json:"fromUserId"`
+	FromNick   string `json:"fromNick"`
+	RoomCode   string `json:"roomCode"`
+	Game       string `json:"game,omitempty"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
 // ClientMessage is sent from Client to Server.
 type ClientMessage struct {
 	Type           string          `json:"type"`
@@ -70,6 +90,15 @@ type ClientMessage struct {
 	ConnectionType string          `json:"connectionType,omitempty"`
 	Timestamp      int64           `json:"timestamp,omitempty"`
 	Port           int             `json:"port,omitempty"`
+
+	// Friends & Presence fields
+	UserID       string   `json:"userId,omitempty"`
+	Status       string   `json:"status,omitempty"` // "online", "in_game"
+	FriendIDs    []string `json:"friendIds,omitempty"`
+	TargetUserID string   `json:"targetUserId,omitempty"`
+	FromUserID   string   `json:"fromUserId,omitempty"`
+	FromNick     string   `json:"fromNick,omitempty"`
+	Game         string   `json:"game,omitempty"`
 }
 
 // ServerMessage is sent from Server to Client.
@@ -94,4 +123,11 @@ type ServerMessage struct {
 	Port            int               `json:"port,omitempty"`
 	Game            interface{}       `json:"game,omitempty"`
 	Nat             interface{}       `json:"nat,omitempty"`
+
+	// Friends & Presence fields
+	Presences    []UserPresence `json:"presences,omitempty"`
+	Presence     *UserPresence  `json:"presence,omitempty"`
+	Invite       *FriendInvite  `json:"invite,omitempty"`
+	TargetUserID string         `json:"targetUserId,omitempty"`
 }
+
