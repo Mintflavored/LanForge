@@ -1851,7 +1851,18 @@
     }
 
     // NATIVE WINDOWS BRIDGES (Discord RPC & System Tray)
+    let lastNativeNotifyKey = "";
+    let lastNativeNotifyTime = 0;
+
     function notifyNative(title, msg) {
+      const now = Date.now();
+      const key = (title || "") + "::" + (msg || "");
+      if (key === lastNativeNotifyKey && (now - lastNativeNotifyTime < 2000)) {
+        return;
+      }
+      lastNativeNotifyKey = key;
+      lastNativeNotifyTime = now;
+
       if (window.pywebview && window.pywebview.api && window.pywebview.api.show_notification) {
         window.pywebview.api.show_notification(title, msg);
       }
@@ -3197,7 +3208,18 @@
         .replace(/'/g, "&#039;");
     }
 
+    let lastToastText = "";
+    let lastToastTime = 0;
+
     function showToast(text) {
+      if (!text) return;
+      const now = Date.now();
+      if (text === lastToastText && (now - lastToastTime < 1500)) {
+        return;
+      }
+      lastToastText = text;
+      lastToastTime = now;
+
       const container = document.getElementById("toast-container");
       if (!container) return;
 
@@ -3498,11 +3520,24 @@
       showToast("Друг удален из списка");
     }
 
+    let inviteCooldowns = {};
+
     function sendFriendInvite(targetUserId) {
       if (!currentRoom || !currentRoom.code) {
         showToast("Вы не в комнате! Сначала создайте или войдите в комнату");
         return;
       }
+      if (currentRoom && Array.isArray(currentRoom.peers) && currentRoom.peers.some(p => p.id === targetUserId || p.userId === targetUserId)) {
+        showToast("Этот друг уже в вашей комнате!");
+        return;
+      }
+      const now = Date.now();
+      if (inviteCooldowns[targetUserId] && (now - inviteCooldowns[targetUserId] < 3000)) {
+        showToast("Приглашение уже отправлено, подождите немного");
+        return;
+      }
+      inviteCooldowns[targetUserId] = now;
+
       const game = currentRoom.gamePreset || "LAN Party";
       sendWS({
         type: "friend_invite",
@@ -3512,11 +3547,14 @@
         code: currentRoom.code,
         game: game
       }, true);
-      showToast("Приглашение отправлено!");
+      // Уведомление об успешной отправке отображается по событию invite_sent от сервера
     }
 
     function showIncomingInvite(invite) {
       if (!invite) return;
+      if (pendingInvite && pendingInvite.roomCode === invite.roomCode && pendingInvite.fromUserId === invite.fromUserId) {
+        return;
+      }
       pendingInvite = invite;
 
       const banner = document.getElementById("incoming-invite-banner");
@@ -3650,14 +3688,27 @@
             const isInGame = (p && p.status === "in_game");
             const statusClass = isOnline ? "online" : "offline";
             
+            const isInMyRoom = !!(
+              currentRoom && (
+                (p && p.roomCode && p.roomCode === currentRoom.code) ||
+                (Array.isArray(currentRoom.peers) && currentRoom.peers.some(peer => 
+                  peer.id === f.id || 
+                  peer.userId === f.id || 
+                  (peer.userId && f.id === peer.userId)
+                ))
+              )
+            );
+
             let statusText = "Не в сети";
-            if (isInGame) {
+            if (isInMyRoom) {
+              statusText = `<span style="color:var(--green); font-weight:600;">В вашей комнате</span> <span style="color:var(--text-dim);">(${escapeHtml(currentRoom.code)})</span>`;
+            } else if (isInGame) {
               statusText = `<span style="color:var(--green); font-weight:600;">В игре: ${escapeHtml(p.game || 'LAN')}</span> <span style="color:var(--text-dim);">(${escapeHtml(p.roomCode || '')})</span>`;
             } else if (isOnline) {
               statusText = `<span style="color:var(--green);">В сети (в меню)</span>`;
             }
 
-            const canInvite = isOnline && currentRoom && currentRoom.code;
+            const canInvite = isOnline && currentRoom && currentRoom.code && !isInMyRoom;
             const canJoinFriend = isInGame && p.roomCode && (!currentRoom || currentRoom.code !== p.roomCode);
 
             return `
@@ -3676,6 +3727,7 @@
                   </div>
                 </div>
                 <div class="friend-actions">
+                  ${isInMyRoom ? `<span style="font-size: 10.5px; color: var(--green); font-weight: 600; padding: 2px 6px;">В комнате</span>` : ''}
                   ${canInvite ? `<button class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="sendFriendInvite('${escapeHtml(f.id)}')">Позвать</button>` : ''}
                   ${canJoinFriend ? `<button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; color:var(--green);" onclick="joinRoomWithCode('${escapeHtml(p.roomCode)}')">Войти</button>` : ''}
                   <button class="btn-icon" style="width: 26px; height: 26px; font-size: 12px; color: var(--text-dim);" title="Удалить из друзей" onclick="removeFriend('${escapeHtml(f.id)}')">✕</button>

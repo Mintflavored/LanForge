@@ -31,7 +31,7 @@ import (
 var embeddedHTML []byte
 
 var (
-	appVersion = "2.3.8"
+	appVersion = "2.3.9"
 
 	appDataDir string
 	configFile string
