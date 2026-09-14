@@ -31,7 +31,7 @@ import (
 var embeddedHTML []byte
 
 var (
-	appVersion = "2.3.7"
+	appVersion = "2.3.8"
 
 	appDataDir string
 	configFile string
@@ -191,8 +191,8 @@ func main() {
 		DataPath:  filepath.Join(appDataDir, "EBWebView"),
 		WindowOptions: webview2.WindowOptions{
 			Title:     "LANForge",
-			Width:     1040,
-			Height:    660,
+			Width:     1160,
+			Height:    700,
 			IconId:    1,
 			Center:    true,
 		},
@@ -204,7 +204,8 @@ func main() {
 	defer w.Destroy()
 
 	w.SetTitle("LANForge")
-	w.SetSize(1040, 660, webview2.HintNone)
+	w.SetSize(1040, 640, webview2.HintMin)
+	w.SetSize(1160, 700, webview2.HintNone)
 
 	// Явная установка иконки окна для панели задач и заголовка (Win32 WM_SETICON)
 	if hwnd := w.Window(); hwnd != nil {

@@ -210,6 +210,7 @@ func (m *RoomManager) CreateRoom(peer *ConnectedPeer, name, gamePreset, password
 
 	peer.Mu.Lock()
 	peer.State.Nick = hostNick
+	peer.State.UserID = peer.UserID
 	peer.State.IsHost = true
 	peer.State.VirtualIP = ip
 	peer.State.CurrentGame = gamePreset
@@ -287,6 +288,10 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password, peerID
 			if nick != "" {
 				existingPeer.State.Nick = nick
 			}
+			if peer.UserID != "" {
+				existingPeer.UserID = peer.UserID
+				existingPeer.State.UserID = peer.UserID
+			}
 			existingPeer.Mu.Unlock()
 
 			// Если временный peer имел другой ID, удаляем его из m.peers и привязываем existingPeer
@@ -337,6 +342,7 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password, peerID
 
 	peer.Mu.Lock()
 	peer.State.Nick = nick
+	peer.State.UserID = peer.UserID
 	peer.State.IsHost = false
 	peer.State.VirtualIP = ip
 	peer.RoomCode = room.Code

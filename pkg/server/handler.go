@@ -518,6 +518,10 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		return peer
 
 	case "create_room":
+		if msg.UserID != "" {
+			peer.UserID = msg.UserID
+			peer.State.UserID = msg.UserID
+		}
 		room, you, err := s.Manager.CreateRoom(peer, msg.Name, msg.GamePreset, msg.Password, msg.HostNick, msg.MaxPeers)
 		if err != nil {
 			_ = peer.SendJSON(protocol.ServerMessage{
@@ -536,6 +540,10 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		return peer
 
 	case "join_room":
+		if msg.UserID != "" {
+			peer.UserID = msg.UserID
+			peer.State.UserID = msg.UserID
+		}
 		room, activePeer, err := s.Manager.JoinRoom(peer, msg.Code, msg.Nick, msg.Password, msg.PeerID, msg.SessionToken)
 		if err != nil {
 			_ = peer.SendJSON(protocol.ServerMessage{

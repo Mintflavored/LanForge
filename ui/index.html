@@ -1585,6 +1585,8 @@
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
       Logger.info("Init", `DOM loaded. Current Nick: ${myNick}, Mode: ${currentServerMode}, Server: ${currentServerUrl}`);
+      cleanDuplicateFriendsAndRecents();
+      saveFriendsAndRecents();
       renderPresets();
       renderStunMatrix();
       renderFriendsUI();
@@ -1653,12 +1655,12 @@
             }
             if (Array.isArray(cfg.friends)) {
               friendsList = cfg.friends;
-              localStorage.setItem("lanforge_friends", JSON.stringify(friendsList));
             }
             if (Array.isArray(cfg.recents)) {
               recentPlayers = cfg.recents;
-              localStorage.setItem("lanforge_recents", JSON.stringify(recentPlayers));
             }
+            cleanDuplicateFriendsAndRecents();
+            saveFriendsAndRecents();
             renderFriendsUI();
             sendPresenceAnnounce();
             console.log("[Config] Loaded persistent config:", cfg);
@@ -1715,7 +1717,8 @@
             code: currentRoom.code,
             nick: myNick || "Player",
             peerId: myId,
-            sessionToken: mySessionToken
+            sessionToken: mySessionToken,
+            userId: myUserId
           });
         }
       };
@@ -2062,13 +2065,25 @@
               }
             }
           }
+          break;
+
         case "presence_snapshot":
           if (Array.isArray(msg.presences)) {
+            let nickUpdated = false;
             msg.presences.forEach(p => {
               if (p && p.userId) {
                 friendsPresence[p.userId] = p;
+                const f = friendsList.find(x => x.id === p.userId);
+                if (f && p.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
+                  f.nick = p.nick;
+                  nickUpdated = true;
+                }
               }
             });
+            if (nickUpdated) {
+              cleanDuplicateFriendsAndRecents();
+              saveFriendsAndRecents();
+            }
             renderFriendsUI();
           }
           break;
@@ -2076,6 +2091,12 @@
         case "presence_update":
           if (msg.presence && msg.presence.userId) {
             friendsPresence[msg.presence.userId] = msg.presence;
+            const f = friendsList.find(x => x.id === msg.presence.userId);
+            if (f && msg.presence.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
+              f.nick = msg.presence.nick;
+              cleanDuplicateFriendsAndRecents();
+              saveFriendsAndRecents();
+            }
             renderFriendsUI();
           }
           break;
@@ -2813,6 +2834,7 @@
         gamePreset: preset,
         password: password,
         hostNick: myNick || "Player",
+        userId: myUserId,
         maxPeers: 16
       }, true);
 
@@ -2837,7 +2859,8 @@
         type: "join_room",
         code: code,
         nick: myNick || "Player",
-        password: password
+        password: password,
+        userId: myUserId
       }, true);
 
       if (sent) {
@@ -3212,6 +3235,125 @@
       });
     }
 
+    function cleanDuplicateFriendsAndRecents() {
+      // 1. Построение карты соответствия session peerId -> постоянный userId
+      const peerToUser = {};
+      recentPlayers.forEach(r => {
+        if (r && r.peerId && r.userId) {
+          peerToUser[r.peerId] = r.userId;
+        }
+      });
+      if (currentRoom && Array.isArray(currentRoom.peers)) {
+        currentRoom.peers.forEach(p => {
+          if (p && p.id && p.userId) {
+            peerToUser[p.id] = p.userId;
+          }
+        });
+      }
+
+      // 2. Эвристика: если есть ровно 1 друг с peer_ и 1 друг с usr_
+      const peerFriends = friendsList.filter(f => f && f.id && f.id.startsWith("peer_"));
+      const userFriends = friendsList.filter(f => f && f.id && f.id.startsWith("usr_"));
+      if (peerFriends.length === 1 && userFriends.length === 1) {
+        const pf = peerFriends[0];
+        const uf = userFriends[0];
+        peerToUser[pf.id] = uf.id;
+        if (!uf.nick || uf.nick.startsWith("Друг ") || uf.nick === uf.id) {
+          if (pf.nick && !pf.nick.startsWith("Друг ") && pf.nick !== pf.id) {
+            uf.nick = pf.nick;
+          }
+        }
+      }
+
+      // 3. Нормализация и дедупликация friendsList
+      const newFriends = [];
+      const seenFriendIds = new Set();
+
+      for (let f of friendsList) {
+        if (!f || !f.id || f.id === myUserId || f.id === myId) continue;
+
+        let friendId = f.id;
+        if (friendId.startsWith("peer_") && peerToUser[friendId]) {
+          friendId = peerToUser[friendId];
+        }
+
+        let friendNick = f.nick || ("Друг " + friendId.slice(-4));
+        const matchingRecent = recentPlayers.find(r => r && (r.id === friendId || r.userId === friendId || r.peerId === friendId));
+        if (matchingRecent && matchingRecent.nick && (!friendNick || friendNick.startsWith("Друг ") || friendNick === friendId)) {
+          friendNick = matchingRecent.nick;
+        }
+
+        if (seenFriendIds.has(friendId)) {
+          const existing = newFriends.find(x => x.id === friendId);
+          if (existing && (!existing.nick || existing.nick.startsWith("Друг ")) && friendNick && !friendNick.startsWith("Друг ")) {
+            existing.nick = friendNick;
+          }
+          continue;
+        }
+
+        seenFriendIds.add(friendId);
+        newFriends.push({
+          id: friendId,
+          nick: friendNick,
+          addedAt: f.addedAt || Date.now()
+        });
+      }
+
+      // Если в друзьях остался peer_ ID, но есть недавний игрок с таким же ником и userId
+      for (let f of newFriends) {
+        if (f.id.startsWith("peer_")) {
+          const matched = recentPlayers.find(r => r && r.nick === f.nick && r.userId);
+          if (matched && matched.userId && !seenFriendIds.has(matched.userId)) {
+            seenFriendIds.delete(f.id);
+            f.id = matched.userId;
+            seenFriendIds.add(f.id);
+          }
+        }
+      }
+
+      friendsList = newFriends;
+
+      // 4. Нормализация и дедупликация recentPlayers
+      const newRecents = [];
+      const seenRecentIds = new Set();
+
+      for (let r of recentPlayers) {
+        if (!r) continue;
+        const rUserId = r.userId || (r.id && r.id.startsWith("usr_") ? r.id : "") || (peerToUser[r.id] || "");
+        const rPeerId = r.peerId || (r.id && r.id.startsWith("peer_") ? r.id : "");
+        const primaryId = rUserId || rPeerId || r.id;
+
+        if (!primaryId || primaryId === myUserId || primaryId === myId) continue;
+
+        if (seenRecentIds.has(primaryId) || (rUserId && seenRecentIds.has(rUserId))) {
+          const existing = newRecents.find(x => x.id === primaryId || (rUserId && x.userId === rUserId));
+          if (existing) {
+            if (r.lastSeen && (!existing.lastSeen || r.lastSeen > existing.lastSeen)) {
+              existing.lastSeen = r.lastSeen;
+            }
+            if (r.nick && (!existing.nick || existing.nick === existing.id)) {
+              existing.nick = r.nick;
+            }
+          }
+          continue;
+        }
+
+        seenRecentIds.add(primaryId);
+        if (rUserId) seenRecentIds.add(rUserId);
+
+        newRecents.push({
+          id: primaryId,
+          userId: rUserId,
+          peerId: rPeerId,
+          nick: r.nick || "Player",
+          lastSeen: r.lastSeen || Date.now(),
+          game: r.game || "LAN Party"
+        });
+      }
+
+      recentPlayers = newRecents.slice(0, 20);
+    }
+
     function saveFriendsAndRecents() {
       localStorage.setItem("lanforge_friends", JSON.stringify(friendsList));
       localStorage.setItem("lanforge_recents", JSON.stringify(recentPlayers));
@@ -3228,19 +3370,30 @@
 
     function recordRecentPeer(peer) {
       if (!peer || !peer.id) return;
-      const pId = peer.userId || peer.id;
-      if (pId === myId || pId === myUserId) return;
+      const pUserId = peer.userId || (peer.id.startsWith("usr_") ? peer.id : "");
+      const pPeerId = peer.id.startsWith("peer_") ? peer.id : (peer.peerId || "");
+      const pId = pUserId || pPeerId || peer.id;
+      if (!pId || pId === myId || pId === myUserId) return;
       const pNick = peer.nick || "Player";
       const game = (currentRoom && currentRoom.gamePreset) || "LAN Game";
 
-      const idx = recentPlayers.findIndex(r => r.id === pId);
+      const idx = recentPlayers.findIndex(r =>
+        (pUserId && (r.id === pUserId || r.userId === pUserId)) ||
+        (pPeerId && (r.id === pPeerId || r.peerId === pPeerId))
+      );
+
       if (idx >= 0) {
+        recentPlayers[idx].id = pId;
+        if (pUserId) recentPlayers[idx].userId = pUserId;
+        if (pPeerId) recentPlayers[idx].peerId = pPeerId;
         recentPlayers[idx].nick = pNick;
         recentPlayers[idx].lastSeen = Date.now();
         recentPlayers[idx].game = game;
       } else {
         recentPlayers.unshift({
           id: pId,
+          userId: pUserId,
+          peerId: pPeerId,
           nick: pNick,
           lastSeen: Date.now(),
           game: game
@@ -3249,6 +3402,8 @@
           recentPlayers = recentPlayers.slice(0, 20);
         }
       }
+
+      cleanDuplicateFriendsAndRecents();
       saveFriendsAndRecents();
       renderFriendsUI();
     }
@@ -3256,21 +3411,26 @@
     function addFriendById() {
       const input = document.getElementById("add-friend-id-input");
       if (!input) return;
-      const val = input.value.trim();
+      let val = input.value.trim();
       if (!val) {
         showToast("Введите ID друга (usr_...)");
         return;
       }
-      if (val === myUserId) {
+      if (val === myUserId || val === myId) {
         showToast("Нельзя добавить самого себя");
         return;
       }
+
+      const recent = recentPlayers.find(r => r.id === val || r.peerId === val);
+      if (recent && recent.userId) {
+        val = recent.userId;
+      }
+
       if (friendsList.some(f => f.id === val)) {
         showToast("Этот друг уже есть в вашем списке");
         return;
       }
-      const fromRecent = recentPlayers.find(r => r.id === val);
-      const nick = fromRecent ? fromRecent.nick : ("Друг " + val.slice(-4));
+      const nick = (recent && recent.nick) ? recent.nick : ("Друг " + val.slice(-4));
       
       friendsList.push({
         id: val,
@@ -3278,6 +3438,7 @@
         addedAt: Date.now()
       });
       input.value = "";
+      cleanDuplicateFriendsAndRecents();
       saveFriendsAndRecents();
       sendPresenceAnnounce();
       renderFriendsUI();
@@ -3286,23 +3447,46 @@
 
     function addFriend(id, nick) {
       if (!id) return;
-      if (id === myUserId) {
+      let targetId = id;
+      const recent = recentPlayers.find(r => r.id === id || r.peerId === id);
+      if (recent && recent.userId) {
+        targetId = recent.userId;
+      } else if (currentRoom && Array.isArray(currentRoom.peers)) {
+        const p = currentRoom.peers.find(p => p.id === id);
+        if (p && p.userId) {
+          targetId = p.userId;
+        }
+      }
+
+      if (targetId === myUserId || targetId === myId) {
         showToast("Нельзя добавить самого себя");
         return;
       }
-      if (friendsList.some(f => f.id === id)) {
+
+      const existing = friendsList.find(f => f.id === targetId || f.id === id);
+      if (existing) {
+        if (nick && (!existing.nick || existing.nick.startsWith("Друг "))) {
+          existing.nick = nick;
+          saveFriendsAndRecents();
+          renderFriendsUI();
+        }
         showToast("Этот друг уже в списке");
         return;
       }
+
+      const finalNick = (nick && !nick.startsWith("Друг ") && nick !== id) ? nick : (recent ? recent.nick : ("Друг " + targetId.slice(-4)));
+
       friendsList.push({
-        id: id,
-        nick: nick || ("Друг " + id.slice(-4)),
+        id: targetId,
+        nick: finalNick,
         addedAt: Date.now()
       });
+
+      cleanDuplicateFriendsAndRecents();
       saveFriendsAndRecents();
       sendPresenceAnnounce();
       renderFriendsUI();
-      showToast(`Игрок ${nick} добавлен в друзья!`);
+      showToast(`Игрок ${finalNick} добавлен в друзья!`);
     }
 
     function removeFriend(id) {
@@ -3387,7 +3571,8 @@
       sendWS({
         type: "join_room",
         code: norm,
-        nick: myNick || "Player"
+        nick: myNick || "Player",
+        userId: myUserId
       }, true);
     }
 
@@ -3520,8 +3705,14 @@
             </div>`;
         } else {
           rContainer.innerHTML = recentPlayers.map(r => {
-            const isAlreadyFriend = friendsList.some(f => f.id === r.id);
+            const isAlreadyFriend = friendsList.some(f => 
+              f.id === r.id || 
+              (r.userId && f.id === r.userId) || 
+              (r.peerId && f.id === r.peerId)
+            );
             const timeAgo = r.lastSeen ? formatTimeAgo(r.lastSeen) : "";
+            const displayId = r.userId || r.id;
+            const targetAddId = r.userId || r.id;
             return `
               <div class="friend-card">
                 <div class="friend-info">
@@ -3531,7 +3722,7 @@
                   <div class="friend-text">
                     <div class="friend-name">
                       ${escapeHtml(r.nick || r.id)}
-                      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(r.id)}</span>
+                      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(displayId)}</span>
                     </div>
                     <div class="friend-status">${escapeHtml(r.game || 'LAN')} • ${timeAgo}</div>
                   </div>
@@ -3540,7 +3731,7 @@
                   ${isAlreadyFriend ? `
                     <span style="font-size: 10.5px; color: var(--green); font-weight: 600; padding: 2px 6px;">В друзьях</span>
                   ` : `
-                    <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="addFriend('${escapeHtml(r.id)}', '${escapeHtml(r.nick)}')">+ В друзья</button>
+                    <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="addFriend('${escapeHtml(targetAddId)}', '${escapeHtml(r.nick)}')">+ В друзья</button>
                   `}
                 </div>
               </div>

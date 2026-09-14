@@ -5,6 +5,7 @@ import "encoding/json"
 // PeerState represents the state of a single peer inside a room.
 type PeerState struct {
 	ID             string  `json:"id"`
+	UserID         string  `json:"userId,omitempty"`
 	Nick           string  `json:"nick"`
 	VirtualIP      string  `json:"virtualIp"`
 	IsHost         bool    `json:"isHost"`
