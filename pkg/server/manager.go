@@ -292,6 +292,12 @@ func (m *RoomManager) JoinRoom(peer *ConnectedPeer, code, nick, password, peerID
 				existingPeer.UserID = peer.UserID
 				existingPeer.State.UserID = peer.UserID
 			}
+			if peer.State.Avatar != "" {
+				existingPeer.State.Avatar = peer.State.Avatar
+			}
+			if peer.State.Bio != "" {
+				existingPeer.State.Bio = peer.State.Bio
+			}
 			existingPeer.Mu.Unlock()
 
 			// Если временный peer имел другой ID, удаляем его из m.peers и привязываем existingPeer
@@ -603,6 +609,17 @@ func (m *RoomManager) AnnouncePresence(peer *ConnectedPeer, presence protocol.Us
 		} else {
 			presence.Status = "online"
 		}
+	}
+
+	if presence.Avatar != "" {
+		peer.State.Avatar = presence.Avatar
+	} else if peer.State.Avatar != "" {
+		presence.Avatar = peer.State.Avatar
+	}
+	if presence.Bio != "" {
+		peer.State.Bio = presence.Bio
+	} else if peer.State.Bio != "" {
+		presence.Bio = peer.State.Bio
 	}
 
 	pCopy := presence

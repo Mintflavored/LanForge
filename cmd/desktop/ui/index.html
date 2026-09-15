@@ -817,6 +817,77 @@
       min-width: 360px;
       max-width: 480px;
     }
+
+    /* PROFILE EDIT MODAL & CUSTOM AVATAR STYLES */
+    .preset-icons-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .preset-icon-btn {
+      height: 36px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: #18181e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .preset-icon-btn:hover {
+      background: #24242c;
+      border-color: var(--border-focus);
+      transform: scale(1.06);
+    }
+    .preset-icon-btn.selected {
+      border-color: var(--accent);
+      background: rgba(255, 85, 0, 0.18);
+      box-shadow: 0 0 8px rgba(255, 85, 0, 0.35);
+    }
+    .gradient-swatches-row {
+      display: flex;
+      gap: 7px;
+    }
+    .gradient-swatch-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .gradient-swatch-btn:hover {
+      transform: scale(1.12);
+    }
+    .gradient-swatch-btn.selected {
+      border-color: #fff;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
+    .profile-avatar-hoverable {
+      position: relative;
+      cursor: pointer;
+      display: inline-block;
+    }
+    .profile-avatar-hoverable:hover .avatar-edit-overlay {
+      opacity: 1;
+    }
+    .avatar-edit-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      color: #fff;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -909,9 +980,7 @@
   <!-- INCOMING GAME INVITE BANNER -->
   <div id="incoming-invite-banner" class="invite-banner-overlay" style="display: none;">
     <div class="invite-box">
-      <div class="profile-avatar" style="width: 38px; height: 38px; font-size: 18px;">
-        🎮
-      </div>
+      <div id="invite-banner-avatar" style="flex-shrink: 0;"></div>
       <div style="flex: 1; min-width: 0;">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
           <span style="font-size: 10.5px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase;">ПРИГЛАШЕНИЕ В ИГРУ</span>
@@ -1333,14 +1402,23 @@
       <!-- USER PROFILE & FRIEND CODE BANNER -->
       <div class="profile-banner">
         <div class="profile-left">
-          <div class="profile-avatar">
-            <span id="profile-avatar-letter">P</span>
-            <span class="status-dot online"></span>
+          <div id="my-profile-avatar-container" class="profile-avatar-hoverable" onclick="openProfileModal()" title="Нажмите, чтобы настроить профиль и аватар">
+            <div class="profile-avatar" style="width: 38px; height: 38px;">
+              <span id="profile-avatar-letter">P</span>
+              <span class="status-dot online"></span>
+            </div>
+            <div class="avatar-edit-overlay">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </div>
           </div>
           <div>
             <div style="font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;">
               <span id="profile-nick-display">Player</span>
               <span class="p2p-badge p2p-badge-direct" style="font-size: 9.5px; padding: 1px 5px;">В СЕТИ</span>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 10px; margin-left: 2px;" onclick="openProfileModal()" title="Редактировать ник, аватар и био">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Профиль
+              </button>
             </div>
             <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
               <span>Мой ID:</span>
@@ -1350,6 +1428,7 @@
                 Копировать
               </button>
             </div>
+            <div id="profile-bio-display" style="display: none; font-size: 11px; color: var(--text-dim); margin-top: 3px; font-style: italic; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
           </div>
         </div>
 
@@ -1488,6 +1567,77 @@
     </div>
   </div>
 
+  <!-- PROFILE EDIT MODAL -->
+  <div id="profile-edit-modal" class="modal-overlay" onclick="onOverlayClick(event, 'profile-edit-modal')">
+    <div class="modal-card" style="width: 440px; max-width: 95vw;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Настройка профиля
+        </div>
+        <button class="modal-close-btn" onclick="closeModals()">✕</button>
+      </div>
+
+      <!-- LIVE PREVIEW BANNER -->
+      <div style="background: #121217; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px;">
+        <div id="profile-modal-avatar-preview" style="flex-shrink: 0;"></div>
+        <div style="min-width: 0; flex: 1;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span id="profile-modal-preview-nick" style="font-size: 14px; font-weight: 800; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Player</span>
+            <span class="p2p-badge p2p-badge-direct" style="font-size: 9px; padding: 1px 4px;">В СЕТИ</span>
+          </div>
+          <div id="profile-modal-preview-bio" style="font-size: 11px; color: var(--text-dim); margin-top: 2px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Без описания</div>
+        </div>
+      </div>
+
+      <!-- FORM FIELDS -->
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label class="form-label" for="profile-edit-nick">Никнейм</label>
+        <input type="text" id="profile-edit-nick" class="input-field" maxlength="24" placeholder="Ваш никнейм" oninput="updateProfilePreview()">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label class="form-label" for="profile-edit-bio" style="margin-bottom: 0;">О себе (Bio)</label>
+          <span id="bio-char-counter" style="font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">0/120</span>
+        </div>
+        <textarea id="profile-edit-bio" class="input-field" maxlength="120" rows="2" placeholder="Краткий статус или во что играете (до 120 символов)..." style="resize: none;" oninput="updateProfilePreview()"></textarea>
+      </div>
+
+      <!-- AVATAR SELECTION -->
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label class="form-label">Выбор аватара</label>
+        
+        <!-- PRESET ICONS GRID -->
+        <div class="preset-icons-grid" id="preset-icons-grid"></div>
+
+        <!-- GRADIENT CHOICES -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
+          <span style="font-size: 11px; color: var(--text-muted);">Цвет фона:</span>
+          <div class="gradient-swatches-row" id="gradient-swatches-row"></div>
+        </div>
+      </div>
+
+      <!-- CUSTOM UPLOAD & RESET ACTIONS -->
+      <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+        <input type="file" id="profile-avatar-file-input" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleAvatarFileSelected(event)">
+        <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="triggerCustomAvatarUpload()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Загрузить картинку
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="resetAvatarToInitial()">
+          Сбросить на букву
+        </button>
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="closeModals()">Отмена</button>
+        <button class="btn btn-primary" onclick="saveProfileChanges()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // TACTICAL UNIFIED LOGGER (Pipes to AppData/lanforge.log)
     const Logger = {
@@ -1582,6 +1732,23 @@
     let pendingInvite = null;
     let inviteTimer = null;
 
+    // PROFILE & AVATAR STATE
+    let myAvatar = localStorage.getItem("lanforge_avatar") || "";
+    let myBio = localStorage.getItem("lanforge_bio") || "";
+    let profileEditTempAvatar = "";
+
+    const AVATAR_PRESET_ICONS = ["🎮", "⚔️", "🧙", "🤖", "🐉", "🐱", "🦊", "💀", "🚀", "👑", "🔥", "⚡", "👾", "🛡️", "💎", "🎯"];
+    const AVATAR_PRESET_GRADIENTS = [
+      "linear-gradient(135deg, #ff5500, #ff8533)",
+      "linear-gradient(135deg, #8b5cf6, #d946ef)",
+      "linear-gradient(135deg, #10b981, #059669)",
+      "linear-gradient(135deg, #06b6d4, #3b82f6)",
+      "linear-gradient(135deg, #374151, #111827)",
+      "linear-gradient(135deg, #ef4444, #991b1b)"
+    ];
+    let currentSelectedPresetIcon = "🎮";
+    let currentSelectedPresetGradient = "linear-gradient(135deg, #ff5500, #ff8533)";
+
     // INITIALIZATION
     window.addEventListener("DOMContentLoaded", () => {
       Logger.info("Init", `DOM loaded. Current Nick: ${myNick}, Mode: ${currentServerMode}, Server: ${currentServerUrl}`);
@@ -1653,6 +1820,14 @@
               myUserId = cfg.userId;
               localStorage.setItem("lanforge_user_id", myUserId);
             }
+            if (cfg.avatar !== undefined) {
+              myAvatar = cfg.avatar;
+              localStorage.setItem("lanforge_avatar", myAvatar);
+            }
+            if (cfg.bio !== undefined) {
+              myBio = cfg.bio;
+              localStorage.setItem("lanforge_bio", myBio);
+            }
             if (Array.isArray(cfg.friends)) {
               friendsList = cfg.friends;
             }
@@ -1718,7 +1893,9 @@
             nick: myNick || "Player",
             peerId: myId,
             sessionToken: mySessionToken,
-            userId: myUserId
+            userId: myUserId,
+            avatar: myAvatar,
+            bio: myBio
           });
         }
       };
@@ -2085,9 +2262,19 @@
               if (p && p.userId) {
                 friendsPresence[p.userId] = p;
                 const f = friendsList.find(x => x.id === p.userId);
-                if (f && p.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
-                  f.nick = p.nick;
-                  nickUpdated = true;
+                if (f) {
+                  if (p.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
+                    f.nick = p.nick;
+                    nickUpdated = true;
+                  }
+                  if (p.avatar && f.avatar !== p.avatar) {
+                    f.avatar = p.avatar;
+                    nickUpdated = true;
+                  }
+                  if (p.bio !== undefined && f.bio !== p.bio) {
+                    f.bio = p.bio;
+                    nickUpdated = true;
+                  }
                 }
               }
             });
@@ -2103,10 +2290,24 @@
           if (msg.presence && msg.presence.userId) {
             friendsPresence[msg.presence.userId] = msg.presence;
             const f = friendsList.find(x => x.id === msg.presence.userId);
-            if (f && msg.presence.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
-              f.nick = msg.presence.nick;
-              cleanDuplicateFriendsAndRecents();
-              saveFriendsAndRecents();
+            if (f) {
+              let updated = false;
+              if (msg.presence.nick && (!f.nick || f.nick.startsWith("Друг ") || f.nick === f.id)) {
+                f.nick = msg.presence.nick;
+                updated = true;
+              }
+              if (msg.presence.avatar && f.avatar !== msg.presence.avatar) {
+                f.avatar = msg.presence.avatar;
+                updated = true;
+              }
+              if (msg.presence.bio !== undefined && f.bio !== msg.presence.bio) {
+                f.bio = msg.presence.bio;
+                updated = true;
+              }
+              if (updated) {
+                cleanDuplicateFriendsAndRecents();
+                saveFriendsAndRecents();
+              }
             }
             renderFriendsUI();
           }
@@ -2670,9 +2871,12 @@
           `<span class="p2p-badge p2p-badge-relay">RELAY</span>` :
           `<span class="p2p-badge p2p-badge-direct">P2P DIRECT</span>`;
 
+        const peerAvatar = (peer.id === myId) ? (myAvatar || peer.avatar) : (peer.avatar || "");
+        const peerAvatarHtml = renderAvatar(peerAvatar, peer.nick, 22, (peer.id === myId ? "online" : ""));
+
         row.innerHTML = `
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="online-dot"></span>
+            ${peerAvatarHtml}
             <span style="font-size: 12px; font-weight: 700;">${escapeHtml(nickTxt)}</span>
             ${connBadge}
             <button class="btn btn-secondary btn-sm" style="font-family: var(--font-mono); font-size: 10px;" onclick="copyText('${peer.virtualIp}')">
@@ -2701,12 +2905,19 @@
       const d = new Date(msg.timestamp);
       const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const isMe = msg.fromPeerId === myId;
+      const fromAv = (msg.fromPeerId === myId) ? (myAvatar || msg.fromAvatar) : (msg.fromAvatar || "");
+      const chatAvatarHtml = renderAvatar(fromAv, msg.fromNick, 18);
 
       line.style.fontSize = "12px";
+      line.style.display = "flex";
+      line.style.alignItems = "center";
+      line.style.gap = "6px";
+      line.style.marginBottom = "4px";
       line.innerHTML = `
-        <span style="font-family: var(--font-mono); color: var(--text-dim); margin-right: 6px;">[${timeStr}]</span>
-        <span style="font-weight: 700; color: ${isMe ? 'var(--accent)' : '#3b82f6'}; margin-right: 6px;">${escapeHtml(msg.fromNick)}:</span>
-        <span style="color: #fff;">${escapeHtml(msg.text)}</span>
+        <span style="font-family: var(--font-mono); color: var(--text-dim); flex-shrink: 0;">[${timeStr}]</span>
+        ${chatAvatarHtml}
+        <span style="font-weight: 700; color: ${isMe ? 'var(--accent)' : '#3b82f6'}; flex-shrink: 0;">${escapeHtml(msg.fromNick)}:</span>
+        <span style="color: #fff; word-break: break-word;">${escapeHtml(msg.text)}</span>
       `;
       box.appendChild(line);
       box.scrollTop = box.scrollHeight;
@@ -2801,16 +3012,26 @@
       localStorage.setItem("lanforge_server_url", currentServerUrl);
 
       // Persist in native AppData config.json
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_config) {
-        window.pywebview.api.save_config({
-          nick: myNick,
-          server_mode: currentServerMode,
-          server_url: currentServerUrl
-        });
+      // Persist in native AppData config.json
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_config) {
+        window.pywebview.api.get_config().then(cfg => {
+          cfg = (typeof cfg === "object" && cfg) ? cfg : {};
+          cfg.nick = myNick;
+          cfg.server_mode = currentServerMode;
+          cfg.server_url = currentServerUrl;
+          cfg.userId = myUserId;
+          cfg.avatar = myAvatar;
+          cfg.bio = myBio;
+          cfg.friends = friendsList;
+          cfg.recents = recentPlayers;
+          window.pywebview.api.save_config(cfg);
+        }).catch(() => {});
       }
 
       closeModals();
       showToast("Настройки сохранены");
+      sendPresenceAnnounce();
+      renderFriendsUI();
 
       if (urlChanged) {
         connectWebSocket(currentServerUrl);
@@ -2827,6 +3048,248 @@
       if (e.target && e.target.id === modalId) {
         closeModals();
       }
+    }
+
+    // PROFILE EDIT & AVATAR HELPER FUNCTIONS
+    function renderAvatar(avatarStr, nick, size, statusDotClass = "", extraClasses = "", onClickAttr = "") {
+      const safeNick = nick || "Player";
+      const sClass = statusDotClass ? `<span class="status-dot ${statusDotClass}"></span>` : "";
+      const exClass = extraClasses ? ` ${extraClasses}` : "";
+      const clk = onClickAttr ? ` onclick="${onClickAttr}"` : "";
+      const cur = onClickAttr ? " cursor: pointer;" : "";
+      const rad = Math.max(5, Math.round(size * 0.22));
+
+      if (avatarStr && avatarStr.startsWith("data:image/")) {
+        return `
+          <div class="profile-avatar${exClass}" style="width: ${size}px; height: ${size}px; border-radius: ${rad}px; background: #1a1a20; padding: 0; flex-shrink: 0;${cur}"${clk}>
+            <img src="${avatarStr}" alt="${escapeHtml(safeNick)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: ${rad}px; display: block;">
+            ${sClass}
+          </div>
+        `;
+      }
+
+      if (avatarStr && avatarStr.startsWith("preset:")) {
+        const parts = avatarStr.split(":");
+        const icon = parts[1] || "🎮";
+        const grad = parts.slice(2).join(":") || "linear-gradient(135deg, #ff5500, #ff8533)";
+        const fontSize = Math.max(10, Math.round(size * 0.5));
+        return `
+          <div class="profile-avatar${exClass}" style="width: ${size}px; height: ${size}px; border-radius: ${rad}px; font-size: ${fontSize}px; background: ${grad}; flex-shrink: 0;${cur}"${clk}>
+            <span>${icon}</span>
+            ${sClass}
+          </div>
+        `;
+      }
+
+      // Default: Initial letter
+      const letter = (safeNick.trim().length > 0) ? safeNick.trim()[0].toUpperCase() : "P";
+      const fontSize = Math.max(10, Math.round(size * 0.44));
+      return `
+        <div class="profile-avatar${exClass}" style="width: ${size}px; height: ${size}px; border-radius: ${rad}px; font-size: ${fontSize}px; background: #23232c; flex-shrink: 0;${cur}"${clk}>
+          <span>${escapeHtml(letter)}</span>
+          ${sClass}
+        </div>
+      `;
+    }
+
+    function openProfileModal() {
+      profileEditTempAvatar = myAvatar;
+      const nickInput = document.getElementById("profile-edit-nick");
+      if (nickInput) nickInput.value = myNick || "Player";
+      const bioInput = document.getElementById("profile-edit-bio");
+      if (bioInput) bioInput.value = myBio || "";
+
+      initProfileModalPresetGrid();
+      initProfileModalGradientSwatches();
+      updateProfilePreview();
+      updateBioCounter();
+
+      const modal = document.getElementById("profile-edit-modal");
+      if (modal) modal.classList.add("active");
+      setTimeout(() => { if (nickInput) nickInput.focus(); }, 50);
+    }
+
+    function initProfileModalPresetGrid() {
+      const grid = document.getElementById("preset-icons-grid");
+      if (!grid) return;
+
+      if (profileEditTempAvatar && profileEditTempAvatar.startsWith("preset:")) {
+        const parts = profileEditTempAvatar.split(":");
+        currentSelectedPresetIcon = parts[1] || "🎮";
+        if (parts.length > 2) {
+          currentSelectedPresetGradient = parts.slice(2).join(":");
+        }
+      }
+
+      grid.innerHTML = AVATAR_PRESET_ICONS.map(icon => {
+        const isSel = (profileEditTempAvatar && profileEditTempAvatar.startsWith("preset:") && currentSelectedPresetIcon === icon);
+        return `
+          <button type="button" class="preset-icon-btn ${isSel ? 'selected' : ''}" onclick="selectPresetIcon('${icon}')" title="${icon}">
+            ${icon}
+          </button>
+        `;
+      }).join("");
+    }
+
+    function initProfileModalGradientSwatches() {
+      const row = document.getElementById("gradient-swatches-row");
+      if (!row) return;
+
+      row.innerHTML = AVATAR_PRESET_GRADIENTS.map(grad => {
+        const isSel = (profileEditTempAvatar && profileEditTempAvatar.startsWith("preset:") && currentSelectedPresetGradient === grad);
+        return `
+          <button type="button" class="gradient-swatch-btn ${isSel ? 'selected' : ''}" style="background: ${grad};" onclick="selectPresetGradient('${grad}')"></button>
+        `;
+      }).join("");
+    }
+
+    function selectPresetIcon(icon) {
+      currentSelectedPresetIcon = icon;
+      profileEditTempAvatar = `preset:${currentSelectedPresetIcon}:${currentSelectedPresetGradient}`;
+      initProfileModalPresetGrid();
+      initProfileModalGradientSwatches();
+      updateProfilePreview();
+    }
+
+    function selectPresetGradient(grad) {
+      currentSelectedPresetGradient = grad;
+      if (!profileEditTempAvatar || !profileEditTempAvatar.startsWith("preset:")) {
+        if (!currentSelectedPresetIcon) currentSelectedPresetIcon = "🎮";
+      }
+      profileEditTempAvatar = `preset:${currentSelectedPresetIcon}:${currentSelectedPresetGradient}`;
+      initProfileModalPresetGrid();
+      initProfileModalGradientSwatches();
+      updateProfilePreview();
+    }
+
+    function triggerCustomAvatarUpload() {
+      const input = document.getElementById("profile-avatar-file-input");
+      if (input) {
+        input.value = "";
+        input.click();
+      }
+    }
+
+    function handleAvatarFileSelected(event) {
+      const file = event.target && event.target.files && event.target.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        showToast("Файл слишком большой (макс. 10 МБ)");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement("canvas");
+          canvas.width = 64;
+          canvas.height = 64;
+          const ctx = canvas.getContext("2d");
+
+          const minDim = Math.min(img.width, img.height);
+          const sx = (img.width - minDim) / 2;
+          const sy = (img.height - minDim) / 2;
+
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 64, 64);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+          profileEditTempAvatar = dataUrl;
+          initProfileModalPresetGrid();
+          initProfileModalGradientSwatches();
+          updateProfilePreview();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetAvatarToInitial() {
+      profileEditTempAvatar = "";
+      initProfileModalPresetGrid();
+      initProfileModalGradientSwatches();
+      updateProfilePreview();
+    }
+
+    function updateBioCounter() {
+      const bioInput = document.getElementById("profile-edit-bio");
+      const counter = document.getElementById("bio-char-counter");
+      if (bioInput && counter) {
+        counter.textContent = `${bioInput.value.length}/120`;
+      }
+    }
+
+    function updateProfilePreview() {
+      const nickInput = document.getElementById("profile-edit-nick");
+      const bioInput = document.getElementById("profile-edit-bio");
+      const prevNick = document.getElementById("profile-modal-preview-nick");
+      const prevBio = document.getElementById("profile-modal-preview-bio");
+      const prevAvatar = document.getElementById("profile-modal-avatar-preview");
+
+      const currNick = (nickInput && nickInput.value.trim()) ? nickInput.value.trim() : (myNick || "Player");
+      const currBio = bioInput ? bioInput.value.trim() : "";
+
+      if (prevNick) prevNick.textContent = currNick;
+      if (prevBio) {
+        if (currBio) {
+          prevBio.textContent = `«${currBio}»`;
+          prevBio.style.color = "var(--text-muted)";
+        } else {
+          prevBio.textContent = "Без описания";
+          prevBio.style.color = "var(--text-dim)";
+        }
+      }
+      if (prevAvatar) {
+        prevAvatar.innerHTML = renderAvatar(profileEditTempAvatar, currNick, 44, "online");
+      }
+      updateBioCounter();
+    }
+
+    function saveProfileChanges() {
+      const nickInput = document.getElementById("profile-edit-nick");
+      const bioInput = document.getElementById("profile-edit-bio");
+
+      const newNick = (nickInput && nickInput.value.trim()) ? nickInput.value.trim() : (myNick || "Player");
+      const newBio = bioInput ? bioInput.value.trim().slice(0, 120) : "";
+
+      myNick = newNick;
+      myAvatar = profileEditTempAvatar;
+      myBio = newBio;
+
+      localStorage.setItem("lanforge_nick", myNick);
+      localStorage.setItem("lanforge_avatar", myAvatar);
+      localStorage.setItem("lanforge_bio", myBio);
+
+      const sNick = document.getElementById("settings-nick");
+      if (sNick) sNick.value = myNick;
+
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_config) {
+        window.pywebview.api.get_config().then(cfg => {
+          cfg = (typeof cfg === "object" && cfg) ? cfg : {};
+          cfg.nick = myNick;
+          cfg.userId = myUserId;
+          cfg.avatar = myAvatar;
+          cfg.bio = myBio;
+          cfg.friends = friendsList;
+          cfg.recents = recentPlayers;
+          window.pywebview.api.save_config(cfg);
+        }).catch(() => {});
+      }
+
+      sendPresenceAnnounce();
+      renderFriendsUI();
+
+      if (currentRoom && Array.isArray(currentRoom.peers)) {
+        const me = currentRoom.peers.find(p => p.id === myId);
+        if (me) {
+          me.nick = myNick;
+          me.avatar = myAvatar;
+          me.bio = myBio;
+        }
+        updateRoomUI();
+      }
+
+      closeModals();
+      showToast("Профиль успешно обновлен!");
     }
 
     function submitCreateRoom() {
@@ -2846,6 +3309,8 @@
         password: password,
         hostNick: myNick || "Player",
         userId: myUserId,
+        avatar: myAvatar,
+        bio: myBio,
         maxPeers: 16
       }, true);
 
@@ -2871,7 +3336,9 @@
         code: code,
         nick: myNick || "Player",
         password: password,
-        userId: myUserId
+        userId: myUserId,
+        avatar: myAvatar,
+        bio: myBio
       }, true);
 
       if (sent) {
@@ -3250,6 +3717,8 @@
         type: "presence_announce",
         userId: myUserId,
         nick: myNick || "Player",
+        avatar: myAvatar,
+        bio: myBio,
         status: currentRoom ? "in_game" : "online",
         game: (currentRoom && currentRoom.gamePreset) || "",
         code: (currentRoom && currentRoom.code) || "",
@@ -3285,6 +3754,8 @@
             uf.nick = pf.nick;
           }
         }
+        if (pf.avatar && !uf.avatar) uf.avatar = pf.avatar;
+        if (pf.bio && !uf.bio) uf.bio = pf.bio;
       }
 
       // 3. Нормализация и дедупликация friendsList
@@ -3307,8 +3778,12 @@
 
         if (seenFriendIds.has(friendId)) {
           const existing = newFriends.find(x => x.id === friendId);
-          if (existing && (!existing.nick || existing.nick.startsWith("Друг ")) && friendNick && !friendNick.startsWith("Друг ")) {
-            existing.nick = friendNick;
+          if (existing) {
+            if ((!existing.nick || existing.nick.startsWith("Друг ")) && friendNick && !friendNick.startsWith("Друг ")) {
+              existing.nick = friendNick;
+            }
+            if (f.avatar && !existing.avatar) existing.avatar = f.avatar;
+            if (f.bio && !existing.bio) existing.bio = f.bio;
           }
           continue;
         }
@@ -3317,6 +3792,8 @@
         newFriends.push({
           id: friendId,
           nick: friendNick,
+          avatar: f.avatar || (matchingRecent && matchingRecent.avatar) || "",
+          bio: f.bio || (matchingRecent && matchingRecent.bio) || "",
           addedAt: f.addedAt || Date.now()
         });
       }
@@ -3328,6 +3805,8 @@
           if (matched && matched.userId && !seenFriendIds.has(matched.userId)) {
             seenFriendIds.delete(f.id);
             f.id = matched.userId;
+            if (matched.avatar && !f.avatar) f.avatar = matched.avatar;
+            if (matched.bio && !f.bio) f.bio = matched.bio;
             seenFriendIds.add(f.id);
           }
         }
@@ -3356,6 +3835,8 @@
             if (r.nick && (!existing.nick || existing.nick === existing.id)) {
               existing.nick = r.nick;
             }
+            if (r.avatar && !existing.avatar) existing.avatar = r.avatar;
+            if (r.bio && !existing.bio) existing.bio = r.bio;
           }
           continue;
         }
@@ -3368,6 +3849,8 @@
           userId: rUserId,
           peerId: rPeerId,
           nick: r.nick || "Player",
+          avatar: r.avatar || "",
+          bio: r.bio || "",
           lastSeen: r.lastSeen || Date.now(),
           game: r.game || "LAN Party"
         });
@@ -3383,6 +3866,8 @@
         window.pywebview.api.get_config().then(cfg => {
           cfg = (typeof cfg === "object" && cfg) ? cfg : {};
           cfg.userId = myUserId;
+          cfg.avatar = myAvatar;
+          cfg.bio = myBio;
           cfg.friends = friendsList;
           cfg.recents = recentPlayers;
           window.pywebview.api.save_config(cfg);
@@ -3409,6 +3894,8 @@
         if (pUserId) recentPlayers[idx].userId = pUserId;
         if (pPeerId) recentPlayers[idx].peerId = pPeerId;
         recentPlayers[idx].nick = pNick;
+        if (peer.avatar) recentPlayers[idx].avatar = peer.avatar;
+        if (peer.bio) recentPlayers[idx].bio = peer.bio;
         recentPlayers[idx].lastSeen = Date.now();
         recentPlayers[idx].game = game;
       } else {
@@ -3417,6 +3904,8 @@
           userId: pUserId,
           peerId: pPeerId,
           nick: pNick,
+          avatar: peer.avatar || "",
+          bio: peer.bio || "",
           lastSeen: Date.now(),
           game: game
         });
@@ -3453,10 +3942,14 @@
         return;
       }
       const nick = (recent && recent.nick) ? recent.nick : ("Друг " + val.slice(-4));
+      const fAvatar = (recent && recent.avatar) ? recent.avatar : "";
+      const fBio = (recent && recent.bio) ? recent.bio : "";
       
       friendsList.push({
         id: val,
         nick: nick,
+        avatar: fAvatar,
+        bio: fBio,
         addedAt: Date.now()
       });
       input.value = "";
@@ -3471,12 +3964,19 @@
       if (!id) return;
       let targetId = id;
       const recent = recentPlayers.find(r => r.id === id || r.peerId === id);
+      let fAvatar = (recent && recent.avatar) ? recent.avatar : "";
+      let fBio = (recent && recent.bio) ? recent.bio : "";
+
       if (recent && recent.userId) {
         targetId = recent.userId;
       } else if (currentRoom && Array.isArray(currentRoom.peers)) {
-        const p = currentRoom.peers.find(p => p.id === id);
+        const p = currentRoom.peers.find(p => p.id === id || p.userId === id);
         if (p && p.userId) {
           targetId = p.userId;
+        }
+        if (p) {
+          if (p.avatar) fAvatar = p.avatar;
+          if (p.bio) fBio = p.bio;
         }
       }
 
@@ -3487,8 +3987,20 @@
 
       const existing = friendsList.find(f => f.id === targetId || f.id === id);
       if (existing) {
+        let changed = false;
         if (nick && (!existing.nick || existing.nick.startsWith("Друг "))) {
           existing.nick = nick;
+          changed = true;
+        }
+        if (fAvatar && !existing.avatar) {
+          existing.avatar = fAvatar;
+          changed = true;
+        }
+        if (fBio && !existing.bio) {
+          existing.bio = fBio;
+          changed = true;
+        }
+        if (changed) {
           saveFriendsAndRecents();
           renderFriendsUI();
         }
@@ -3501,6 +4013,8 @@
       friendsList.push({
         id: targetId,
         nick: finalNick,
+        avatar: fAvatar,
+        bio: fBio,
         addedAt: Date.now()
       });
 
@@ -3544,6 +4058,7 @@
         targetUserId: targetUserId,
         fromUserId: myUserId,
         fromNick: myNick,
+        fromAvatar: myAvatar,
         code: currentRoom.code,
         game: game
       }, true);
@@ -3560,6 +4075,11 @@
       const banner = document.getElementById("incoming-invite-banner");
       const txt = document.getElementById("invite-banner-text");
       const roomLbl = document.getElementById("invite-banner-room");
+      const invAvatarEl = document.getElementById("invite-banner-avatar");
+
+      if (invAvatarEl) {
+        invAvatarEl.innerHTML = renderAvatar(invite.fromAvatar, invite.fromNick, 38);
+      }
 
       if (txt) {
         const game = invite.game ? `в ${invite.game}` : "в игру";
@@ -3610,7 +4130,9 @@
         type: "join_room",
         code: norm,
         nick: myNick || "Player",
-        userId: myUserId
+        userId: myUserId,
+        avatar: myAvatar,
+        bio: myBio
       }, true);
     }
 
@@ -3632,10 +4154,28 @@
       // Profile Header Card
       const nickEl = document.getElementById("profile-nick-display");
       if (nickEl) nickEl.textContent = myNick || "Player";
-      const avatarLetter = document.getElementById("profile-avatar-letter");
-      if (avatarLetter) avatarLetter.textContent = (myNick && myNick.length > 0) ? myNick[0].toUpperCase() : "P";
       const uidEl = document.getElementById("my-profile-user-id");
       if (uidEl) uidEl.textContent = myUserId || "usr_...";
+
+      const myAvatarContainer = document.getElementById("my-profile-avatar-container");
+      if (myAvatarContainer) {
+        myAvatarContainer.innerHTML = `
+          ${renderAvatar(myAvatar, myNick, 38, "online")}
+          <div class="avatar-edit-overlay">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </div>
+        `;
+      }
+      const bioEl = document.getElementById("profile-bio-display");
+      if (bioEl) {
+        if (myBio && myBio.trim()) {
+          bioEl.textContent = `«${myBio.trim()}»`;
+          bioEl.style.display = "block";
+        } else {
+          bioEl.textContent = "";
+          bioEl.style.display = "none";
+        }
+      }
 
       // Online Friends Count
       let onlineCount = 0;
@@ -3711,19 +4251,21 @@
             const canInvite = isOnline && currentRoom && currentRoom.code && !isInMyRoom;
             const canJoinFriend = isInGame && p.roomCode && (!currentRoom || currentRoom.code !== p.roomCode);
 
+            const fAvatar = (p && p.avatar) ? p.avatar : (f.avatar || "");
+            const fBio = (p && p.bio !== undefined) ? p.bio : (f.bio || "");
+            const friendAvatarHtml = renderAvatar(fAvatar, f.nick, 28, statusClass);
+
             return `
               <div class="friend-card">
                 <div class="friend-info">
-                  <div class="profile-avatar" style="width: 28px; height: 28px; font-size: 12px; background: #23232c;">
-                    ${escapeHtml((f.nick && f.nick[0]) ? f.nick[0].toUpperCase() : "U")}
-                    <span class="status-dot ${statusClass}"></span>
-                  </div>
+                  ${friendAvatarHtml}
                   <div class="friend-text">
                     <div class="friend-name">
                       ${escapeHtml(f.nick || f.id)}
                       <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(f.id)}</span>
                     </div>
                     <div class="friend-status">${statusText}</div>
+                    ${fBio ? `<div style="font-size: 10.5px; color: var(--text-dim); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; margin-top: 1px;">«${escapeHtml(fBio)}»</div>` : ''}
                   </div>
                 </div>
                 <div class="friend-actions">
@@ -3765,18 +4307,21 @@
             const timeAgo = r.lastSeen ? formatTimeAgo(r.lastSeen) : "";
             const displayId = r.userId || r.id;
             const targetAddId = r.userId || r.id;
+            const rAvatar = r.avatar || "";
+            const rBio = r.bio || "";
+            const recentAvatarHtml = renderAvatar(rAvatar, r.nick, 28);
+
             return `
               <div class="friend-card">
                 <div class="friend-info">
-                  <div class="profile-avatar" style="width: 28px; height: 28px; font-size: 12px; background: #23232c;">
-                    ${escapeHtml((r.nick && r.nick[0]) ? r.nick[0].toUpperCase() : "P")}
-                  </div>
+                  ${recentAvatarHtml}
                   <div class="friend-text">
                     <div class="friend-name">
                       ${escapeHtml(r.nick || r.id)}
                       <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); font-weight: normal;">${escapeHtml(displayId)}</span>
                     </div>
                     <div class="friend-status">${escapeHtml(r.game || 'LAN')} • ${timeAgo}</div>
+                    ${rBio ? `<div style="font-size: 10.5px; color: var(--text-dim); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; margin-top: 1px;">«${escapeHtml(rBio)}»</div>` : ''}
                   </div>
                 </div>
                 <div class="friend-actions">

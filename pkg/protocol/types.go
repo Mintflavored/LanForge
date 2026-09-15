@@ -7,6 +7,8 @@ type PeerState struct {
 	ID             string  `json:"id"`
 	UserID         string  `json:"userId,omitempty"`
 	Nick           string  `json:"nick"`
+	Avatar         string  `json:"avatar,omitempty"`
+	Bio            string  `json:"bio,omitempty"`
 	VirtualIP      string  `json:"virtualIp"`
 	IsHost         bool    `json:"isHost"`
 	IsReady        bool    `json:"isReady"`
@@ -43,6 +45,7 @@ type ChatMessage struct {
 	ID         string `json:"id"`
 	FromPeerID string `json:"fromPeerId"`
 	FromNick   string `json:"fromNick"`
+	FromAvatar string `json:"fromAvatar,omitempty"`
 	Text       string `json:"text"`
 	Timestamp  int64  `json:"timestamp"`
 }
@@ -51,6 +54,8 @@ type ChatMessage struct {
 type UserPresence struct {
 	UserID   string `json:"userId"`
 	Nick     string `json:"nick"`
+	Avatar   string `json:"avatar,omitempty"`
+	Bio      string `json:"bio,omitempty"`
 	Status   string `json:"status"` // "online", "in_game", "offline"
 	Game     string `json:"game,omitempty"`
 	RoomCode string `json:"roomCode,omitempty"`
@@ -62,6 +67,7 @@ type UserPresence struct {
 type FriendInvite struct {
 	FromUserID string `json:"fromUserId"`
 	FromNick   string `json:"fromNick"`
+	FromAvatar string `json:"fromAvatar,omitempty"`
 	RoomCode   string `json:"roomCode"`
 	Game       string `json:"game,omitempty"`
 	Timestamp  int64  `json:"timestamp"`
@@ -94,6 +100,8 @@ type ClientMessage struct {
 
 	// Friends & Presence fields
 	UserID       string   `json:"userId,omitempty"`
+	Avatar       string   `json:"avatar,omitempty"`
+	Bio          string   `json:"bio,omitempty"`
 	Status       string   `json:"status,omitempty"` // "online", "in_game"
 	FriendIDs    []string `json:"friendIds,omitempty"`
 	TargetUserID string   `json:"targetUserId,omitempty"`

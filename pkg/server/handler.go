@@ -522,6 +522,12 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 			peer.UserID = msg.UserID
 			peer.State.UserID = msg.UserID
 		}
+		if msg.Avatar != "" {
+			peer.State.Avatar = msg.Avatar
+		}
+		if msg.Bio != "" {
+			peer.State.Bio = msg.Bio
+		}
 		room, you, err := s.Manager.CreateRoom(peer, msg.Name, msg.GamePreset, msg.Password, msg.HostNick, msg.MaxPeers)
 		if err != nil {
 			_ = peer.SendJSON(protocol.ServerMessage{
@@ -543,6 +549,12 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		if msg.UserID != "" {
 			peer.UserID = msg.UserID
 			peer.State.UserID = msg.UserID
+		}
+		if msg.Avatar != "" {
+			peer.State.Avatar = msg.Avatar
+		}
+		if msg.Bio != "" {
+			peer.State.Bio = msg.Bio
 		}
 		room, activePeer, err := s.Manager.JoinRoom(peer, msg.Code, msg.Nick, msg.Password, msg.PeerID, msg.SessionToken)
 		if err != nil {
@@ -592,6 +604,7 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 			ID:         generateID("msg"),
 			FromPeerID: peer.ID,
 			FromNick:   peer.State.Nick,
+			FromAvatar: peer.State.Avatar,
 			Text:       msg.Text,
 			Timestamp:  time.Now().UnixMilli(),
 		}
@@ -655,9 +668,20 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		}()
 
 	case "presence_announce":
+		if msg.Nick != "" {
+			peer.State.Nick = msg.Nick
+		}
+		if msg.Avatar != "" {
+			peer.State.Avatar = msg.Avatar
+		}
+		if msg.Bio != "" {
+			peer.State.Bio = msg.Bio
+		}
 		presence := protocol.UserPresence{
 			UserID:   msg.UserID,
 			Nick:     msg.Nick,
+			Avatar:   msg.Avatar,
+			Bio:      msg.Bio,
 			Status:   msg.Status,
 			Game:     msg.Game,
 			RoomCode: msg.Code,
@@ -665,9 +689,21 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		if presence.Nick == "" {
 			presence.Nick = peer.State.Nick
 		}
+		if presence.Avatar == "" {
+			presence.Avatar = peer.State.Avatar
+		}
+		if presence.Bio == "" {
+			presence.Bio = peer.State.Bio
+		}
 		if peer.RoomCode != "" {
 			presence.RoomCode = peer.RoomCode
 			presence.Status = "in_game"
+			if room := s.Manager.GetRoom(peer.RoomCode); room != nil {
+				room.Broadcast(protocol.ServerMessage{
+					Type: "peer_updated",
+					Peer: &peer.State,
+				}, "")
+			}
 		}
 		snapshot := s.Manager.AnnouncePresence(peer, presence, msg.FriendIDs)
 		_ = peer.SendJSON(protocol.ServerMessage{
@@ -678,12 +714,42 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 
 	case "presence_update":
 		if msg.UserID != "" {
+			if msg.Nick != "" {
+				peer.State.Nick = msg.Nick
+			}
+			if msg.Avatar != "" {
+				peer.State.Avatar = msg.Avatar
+			}
+			if msg.Bio != "" {
+				peer.State.Bio = msg.Bio
+			}
 			presence := protocol.UserPresence{
 				UserID:   msg.UserID,
 				Nick:     msg.Nick,
+				Avatar:   msg.Avatar,
+				Bio:      msg.Bio,
 				Status:   msg.Status,
 				Game:     msg.Game,
 				RoomCode: msg.Code,
+			}
+			if presence.Nick == "" {
+				presence.Nick = peer.State.Nick
+			}
+			if presence.Avatar == "" {
+				presence.Avatar = peer.State.Avatar
+			}
+			if presence.Bio == "" {
+				presence.Bio = peer.State.Bio
+			}
+			if peer.RoomCode != "" {
+				presence.RoomCode = peer.RoomCode
+				presence.Status = "in_game"
+				if room := s.Manager.GetRoom(peer.RoomCode); room != nil {
+					room.Broadcast(protocol.ServerMessage{
+						Type: "peer_updated",
+						Peer: &peer.State,
+					}, "")
+				}
 			}
 			snapshot := s.Manager.AnnouncePresence(peer, presence, msg.FriendIDs)
 			if len(msg.FriendIDs) > 0 {
@@ -712,6 +778,10 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		if fromUID == "" {
 			fromUID = peer.UserID
 		}
+		fromAvatar := msg.Avatar
+		if fromAvatar == "" {
+			fromAvatar = peer.State.Avatar
+		}
 		roomCode := msg.Code
 		if roomCode == "" {
 			roomCode = peer.RoomCode
@@ -719,6 +789,7 @@ func (s *Server) handleClientMessage(peer *ConnectedPeer, msg protocol.ClientMes
 		invite := protocol.FriendInvite{
 			FromUserID: fromUID,
 			FromNick:   fromNick,
+			FromAvatar: fromAvatar,
 			RoomCode:   roomCode,
 			Game:       msg.Game,
 		}
