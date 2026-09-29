@@ -3,6 +3,7 @@ build/
 dist/
 target/
 *.exe
+*.exe~
 *.zip
 *.spec
 *.pyc
