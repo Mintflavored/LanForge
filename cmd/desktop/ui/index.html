@@ -1712,6 +1712,9 @@
     let selectedCategory = "Все";
     let ws = null;
     let pingTimer = null;
+    let wsReconnectTimer = null;
+    let wasDisconnectedFromRoom = false;
+    let lastRoomReconnectedToastTime = 0;
     let pingHistory = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
     let discoveredGames = [];
     let currentTab = "overview";
@@ -1863,7 +1866,17 @@
     }
 
     function connectWebSocket(url = currentServerUrl) {
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+
       if (ws) {
+        // Detach handlers so closing old socket cannot trigger onclose reconnect loop!
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
         try { ws.close(); } catch(e) {}
         ws = null;
       }
@@ -1880,6 +1893,10 @@
       }
 
       ws.onopen = () => {
+        if (wsReconnectTimer) {
+          clearTimeout(wsReconnectTimer);
+          wsReconnectTimer = null;
+        }
         connectionAttempts = 0;
         Logger.info("WS", `Successfully connected to: ${currentServerUrl}`);
         startPingHeartbeat();
@@ -1917,12 +1934,21 @@
 
       ws.onclose = (event) => {
         updateConnectionStatus(false);
+        if (currentRoom) {
+          wasDisconnectedFromRoom = true;
+        }
         connectionAttempts++;
-        if (pingTimer) clearInterval(pingTimer);
-        Logger.warn("WS", `Socket closed (code: ${event ? event.code : 'unknown'}, reason: ${event ? event.reason : 'none'}). Reconnecting in 2.5s...`);
+        if (pingTimer) {
+          clearInterval(pingTimer);
+          pingTimer = null;
+        }
+        Logger.warn("WS", `Socket closed (code: ${event ? event.code : 'unknown'}, reason: ${event ? event.reason : 'none'}). Reconnecting in 3s...`);
 
-        // Retry connection without spamming or overwriting user settings
-        setTimeout(() => connectWebSocket(currentServerUrl), 2500);
+        // Avoid accumulating multiple timers
+        if (wsReconnectTimer) {
+          clearTimeout(wsReconnectTimer);
+        }
+        wsReconnectTimer = setTimeout(() => connectWebSocket(currentServerUrl), 3000);
       };
     }
 
@@ -1937,7 +1963,9 @@
       Logger.warn("SendWS", `Cannot send (readyState=${ws ? ws.readyState : 'null'}): ${JSON.stringify(payload)}`);
       if (notifyOnError) {
         showToast("Нет связи с сервером! Подключение...");
-        connectWebSocket(currentServerUrl);
+        if (!wsReconnectTimer) {
+          connectWebSocket(currentServerUrl);
+        }
       }
       return false;
     }
@@ -2102,14 +2130,19 @@
             showToast(msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
             notifyNative("LANForge", msg.type === "room_created" ? "Комната создана" : "Вы вошли в комнату");
           } else {
-            showToast("Связь с комнатой восстановлена");
+            const now = Date.now();
+            if (wasDisconnectedFromRoom && (now - lastRoomReconnectedToastTime > 15000)) {
+              lastRoomReconnectedToastTime = now;
+              wasDisconnectedFromRoom = false;
+              showToast("Связь с комнатой восстановлена");
+            }
           }
           syncNativePresence();
           sendPresenceAnnounce();
           if (currentRoom && currentRoom.peers) {
             currentRoom.peers.forEach(p => recordRecentPeer(p));
           }
-          if (currentRoom && currentRoom.hostId === myId) {
+          if (currentRoom && currentRoom.hostId === myId && !isReconnecting) {
             refreshSteamStatus();
             setTimeout(broadcastSteamHostInfo, 800);
           }
