@@ -2143,8 +2143,11 @@
             currentRoom.peers.forEach(p => recordRecentPeer(p));
           }
           if (currentRoom && currentRoom.hostId === myId && !isReconnecting) {
-            refreshSteamStatus();
-            setTimeout(broadcastSteamHostInfo, 800);
+            const curP = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset);
+            if (!curP || curP.protocol !== "UDP") {
+              refreshSteamStatus();
+              setTimeout(broadcastSteamHostInfo, 800);
+            }
           }
           break;
 
@@ -2160,8 +2163,11 @@
             showToast(`Игрок ${msg.peer.nick} подключился`);
             notifyNative("LANForge", `Игрок ${msg.peer.nick} подключился`);
             if (currentRoom && currentRoom.hostId === myId) {
-              refreshSteamStatus();
-              setTimeout(broadcastSteamHostInfo, 800);
+              const curP = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset);
+              if (!curP || curP.protocol !== "UDP") {
+                refreshSteamStatus();
+                setTimeout(broadcastSteamHostInfo, 800);
+              }
             }
           }
 
@@ -2820,7 +2826,8 @@
       const isHost = (myId === currentRoom.hostId);
 
       // Manage Game Tunnel UI & Auto-start
-      const isSteamMode = (currentServerMode === "steam");
+      const isUdpGame = (preset.protocol === "UDP" || preset.id === "anime_fighting");
+      const isSteamMode = (currentServerMode === "steam" && !isUdpGame);
       const tunnelCard = document.getElementById("tunnel-card");
       const steamCard = document.getElementById("steam-p2p-card");
       const hostPanel = document.getElementById("tunnel-host-panel");
@@ -2864,10 +2871,22 @@
           pill.textContent = "P2P DIRECT";
         }
         const proto = document.getElementById("metric-proto");
-        if (proto) proto.textContent = "UDP/P2P";
+        if (proto) proto.textContent = isUdpGame ? "UDP/P2P" : "TCP/P2P";
         if (tunnelCard && hostPanel && clientPanel) {
           tunnelCard.style.display = "block";
-          if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "MINECRAFT";
+          if (gameNameEl) gameNameEl.textContent = preset.name ? preset.name.toUpperCase() : "GAME";
+
+          const portInput = document.getElementById("host-game-port-input");
+          if (portInput && (!portInput.dataset.lastPreset || portInput.dataset.lastPreset !== preset.id)) {
+            portInput.value = preset.port || 25565;
+            portInput.dataset.lastPreset = preset.id;
+          }
+
+          const clientAddrEl = document.getElementById("tunnel-client-addr");
+          if (clientAddrEl) {
+            clientAddrEl.textContent = `127.0.0.1:${preset.port || 25565}`;
+          }
+          currentListenPort = preset.port || 25565;
 
           if (isHost) {
             hostPanel.style.display = "flex";
@@ -3526,6 +3545,8 @@
 
     function broadcastSteamHostInfo() {
       if (!currentRoom || currentRoom.hostId !== myId) return;
+      const preset = GAME_PRESETS.find(p => p.id === currentRoom.gamePreset);
+      if (preset && preset.protocol === "UDP") return; // UDP games use Go Tunnel Engine, not Steam SDR
       if (!currentSteamState || !currentSteamState.self_info || !currentSteamState.self_info.steam_id) {
         refreshSteamStatus();
         setTimeout(broadcastSteamHostInfo, 600);
@@ -3547,6 +3568,10 @@
       try {
         const data = JSON.parse(payloadStr);
         if (!data || !data.steamId) return;
+        if (currentRoom && currentRoom.gamePreset) {
+          const p = GAME_PRESETS.find(x => x.id === currentRoom.gamePreset);
+          if (p && p.protocol === "UDP") return; // Ignore Steam SDR announce for UDP games
+        }
 
         const targetInput = document.getElementById("steam-target-id-input");
         if (targetInput) targetInput.value = data.steamId;

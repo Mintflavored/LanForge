@@ -134,8 +134,12 @@ func (e *TunnelEngine) Start() error {
 			}
 		}
 
-		// If DiscoveryPort is configured (e.g. 27846 for Anime Fighting), start local discovery responder
+		// If DiscoveryPort is configured (e.g. 27846 for Anime Fighting), start local discovery beacon and responder
 		if e.cfg.DiscoveryPort > 0 {
+			// 1. Periodically broadcast ANIME_FIGHT_ROOM_READY_V1 to local game client on port 27846
+			go e.startDiscoveryBeacon(e.cfg.DiscoveryPort)
+
+			// 2. Also listen for active discovery search queries if port is free
 			discAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", e.cfg.DiscoveryPort))
 			if err == nil {
 				discConn, err := net.ListenUDP("udp4", discAddr)
@@ -457,6 +461,41 @@ func (e *TunnelEngine) readClientUDPLoop() {
 
 		target := e.cfg.TargetPeerID
 		_ = e.sendFrameTo(target, FrameUDPData, streamID, buf[:n])
+	}
+}
+
+// startDiscoveryBeacon broadcasts periodic LAN room announcements to local game clients (e.g. Anime Fighting)
+func (e *TunnelEngine) startDiscoveryBeacon(port int) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	unicastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return
+	}
+	broadcastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
+
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0})
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	beaconMsg := []byte("ANIME_FIGHT_ROOM_READY_V1")
+
+	for {
+		select {
+		case <-e.stopChan:
+			return
+		case <-ticker.C:
+			if !e.running.Load() {
+				return
+			}
+			_, _ = conn.WriteToUDP(beaconMsg, unicastAddr)
+			if broadcastAddr != nil {
+				_, _ = conn.WriteToUDP(beaconMsg, broadcastAddr)
+			}
+		}
 	}
 }
 
