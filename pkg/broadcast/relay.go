@@ -239,8 +239,8 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 
 		r.emit(DiscoveredGame{
 			ID:         fmt.Sprintf("animefight_%s_%d", hostIP, 27845),
-			GameName:   "Anime Fighting",
-			Name:       "Anime Fighting (LAN комната)",
+			GameName:   "Anime Fighting: Multiverse",
+			Name:       "Anime Fighting: Multiverse (LAN комната)",
 			HostNick:   "Local Host",
 			HostIP:     hostIP,
 			IP:         hostIP,

@@ -153,7 +153,7 @@ var AllPresets = []GamePreset{
 	},
 	{
 		ID:                    "anime_fighting",
-		Name:                  "Anime Fighting",
+		Name:                  "Anime Fighting: Multiverse",
 		Category:              "Fighting",
 		DefaultPort:           27845,
 		Protocol:              "udp",

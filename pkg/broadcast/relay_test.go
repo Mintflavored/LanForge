@@ -81,8 +81,8 @@ func TestAnimeFightingPacketParsing(t *testing.T) {
 		if game.Port != 27845 {
 			t.Fatalf("expected port 27845, got %d", game.Port)
 		}
-		if game.GameName != "Anime Fighting" {
-			t.Fatalf("expected gameName 'Anime Fighting', got '%s'", game.GameName)
+		if game.GameName != "Anime Fighting: Multiverse" {
+			t.Fatalf("expected gameName 'Anime Fighting: Multiverse', got '%s'", game.GameName)
 		}
 		if game.HostIP != "192.168.1.120" {
 			t.Fatalf("expected host IP '192.168.1.120', got '%s'", game.HostIP)

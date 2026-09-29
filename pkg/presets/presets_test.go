@@ -43,7 +43,7 @@ func TestFindPreset(t *testing.T) {
 	if af == nil {
 		t.Fatal("expected to find anime_fighting preset")
 	}
-	if af.DefaultPort != 27845 || af.Protocol != "udp" || af.DiscoveryPort != 27846 {
+	if af.DefaultPort != 27845 || af.Protocol != "udp" || af.DiscoveryPort != 27846 || af.Name != "Anime Fighting: Multiverse" {
 		t.Errorf("unexpected anime_fighting preset values: %+v", af)
 	}
 }
