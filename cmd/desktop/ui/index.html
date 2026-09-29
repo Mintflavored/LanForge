@@ -1269,6 +1269,7 @@
         <button class="chip" onclick="setGameCategory('Песочницы', this)">Песочницы</button>
         <button class="chip" onclick="setGameCategory('Шутеры', this)">Шутеры</button>
         <button class="chip" onclick="setGameCategory('Выживание', this)">Выживание</button>
+        <button class="chip" onclick="setGameCategory('Файтинги', this)">Файтинги</button>
         <button class="chip" onclick="setGameCategory('Классика', this)">Классика</button>
       </div>
 
@@ -1686,6 +1687,7 @@
       { id: "homm3", name: "Heroes of Might and Magic III", category: "Классика", port: 2300, protocol: "TCP", hint: "Многопользовательская -> TCP/IP -> {HOST_IP}" },
       { id: "worms_armageddon", name: "Worms Armageddon", category: "Классика", port: 17011, protocol: "TCP", hint: "Сетевая игра -> Direct IP -> {HOST_IP}" },
       { id: "assetto_corsa", name: "Assetto Corsa", category: "Классика", port: 9600, protocol: "BOTH", hint: "Content Manager -> Drive -> LAN -> Сервер хоста" },
+      { id: "anime_fighting", name: "Anime Fighting", category: "Файтинги", port: 27845, protocol: "UDP", discoveryPort: 27846, hint: "Онлайн · LAN / VPN -> Присоединиться (или IP: {HOST_IP})" },
     ];
 
     const STUN_SERVERS = [
@@ -3360,6 +3362,7 @@
       if (portInput && portInput.value) {
         gamePort = parseInt(portInput.value) || gamePort;
       }
+      const discoveryPort = preset.discoveryPort || (preset.id === 'anime_fighting' ? 27846 : 0);
 
       const payload = {
         hubUrl: currentServerUrl,
@@ -3367,7 +3370,8 @@
         isHost: isHost,
         peerId: myId,
         targetPeerId: isHost ? "" : currentRoom.hostId,
-        gamePort: gamePort
+        gamePort: gamePort,
+        discoveryPort: discoveryPort
       };
 
       Logger.info("Tunnel", `Requesting tunnel start: isHost=${isHost}, port=${gamePort}, hub=${currentServerUrl}`);

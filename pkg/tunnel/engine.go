@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,19 +15,21 @@ import (
 )
 
 const (
-	FrameOpen  byte = 0x01
-	FrameData  byte = 0x02
-	FrameClose byte = 0x03
+	FrameOpen    byte = 0x01
+	FrameData    byte = 0x02
+	FrameClose   byte = 0x03
+	FrameUDPData byte = 0x04
 )
 
 // EngineConfig configures a game tunnel instance.
 type EngineConfig struct {
-	HubURL       string // e.g. "wss://lanforge.onrender.com" or "ws://127.0.0.1:8787"
-	RoomCode     string // e.g. "SEN-LFZ"
-	IsHost       bool   // true if this peer is the host
-	MyPeerID     string // Client's signaling peer ID
-	TargetPeerID string // Host's peer ID (if client)
-	GamePort     int    // Host: local game port (e.g. 5000); Client: local listen port (e.g. 25565)
+	HubURL        string // e.g. "wss://lanforge.onrender.com" or "ws://127.0.0.1:8787"
+	RoomCode      string // e.g. "SEN-LFZ"
+	IsHost        bool   // true if this peer is the host
+	MyPeerID      string // Client's signaling peer ID
+	TargetPeerID  string // Host's peer ID (if client)
+	GamePort      int    // Host: local game port (e.g. 5000); Client: local listen port (e.g. 25565)
+	DiscoveryPort int    // Optional LAN discovery port (e.g. 27846 for Anime Fighting)
 }
 
 // TunnelEngine manages TCP listening/dialing and multiplexing over a resilient WebSocket tunnel.
@@ -43,15 +46,26 @@ type TunnelEngine struct {
 	stopChan    chan struct{}
 	BytesUp     atomic.Uint64
 	BytesDown   atomic.Uint64
+
+	// UDP proxying fields
+	udpListener          *net.UDPConn
+	udpDiscoveryListener *net.UDPConn
+	udpMu                sync.RWMutex
+	clientUDPSessions    map[string]uint32       // "ip:port" -> streamID
+	clientUDPSrcAddrs    map[uint32]*net.UDPAddr // streamID -> srcAddr
+	hostUDPSessions      map[string]*net.UDPConn // "senderID:streamID" -> dial conn to local game
 }
 
 // NewTunnelEngine creates a new game tunnel engine.
 func NewTunnelEngine(cfg EngineConfig) *TunnelEngine {
 	return &TunnelEngine{
-		cfg:         cfg,
-		streams:     make(map[uint32]net.Conn),
-		streamPeers: make(map[uint32]string),
-		stopChan:    make(chan struct{}),
+		cfg:               cfg,
+		streams:           make(map[uint32]net.Conn),
+		streamPeers:       make(map[uint32]string),
+		stopChan:          make(chan struct{}),
+		clientUDPSessions: make(map[string]uint32),
+		clientUDPSrcAddrs: make(map[uint32]*net.UDPAddr),
+		hostUDPSessions:   make(map[string]*net.UDPConn),
 	}
 }
 
@@ -88,7 +102,7 @@ func (e *TunnelEngine) Start() error {
 	// 4. Start persistent Ping-Heartbeat loop
 	go e.pingLoop()
 
-	// 5. If Client (Friend), start local TCP listener for Minecraft
+	// 5. If Client (Friend), start local TCP listener and UDP listener
 	if !e.cfg.IsHost {
 		listenAddr := fmt.Sprintf("127.0.0.1:%d", e.cfg.GamePort)
 		l, err := net.Listen("tcp", listenAddr)
@@ -101,11 +115,39 @@ func (e *TunnelEngine) Start() error {
 			}
 		}
 		e.listener = l
-		e.cfg.GamePort = l.Addr().(*net.TCPAddr).Port
-		log.Printf("[Tunnel Client] Listening for Minecraft on %s -> forwarding to host %s", l.Addr().String(), e.cfg.TargetPeerID)
+		actualPort := l.Addr().(*net.TCPAddr).Port
+		e.cfg.GamePort = actualPort
+		log.Printf("[Tunnel Client] Listening for TCP game clients on %s -> forwarding to host %s", l.Addr().String(), e.cfg.TargetPeerID)
 		go e.acceptGameClients()
+
+		// Start local UDP listener on the same port
+		udpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", actualPort))
+		if err == nil {
+			uconn, err := net.ListenUDP("udp4", udpAddr)
+			if err != nil {
+				uconn, _ = net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+			}
+			if uconn != nil {
+				e.udpListener = uconn
+				log.Printf("[Tunnel Client] Listening for UDP game packets on %s -> forwarding to host %s", uconn.LocalAddr().String(), e.cfg.TargetPeerID)
+				go e.readClientUDPLoop()
+			}
+		}
+
+		// If DiscoveryPort is configured (e.g. 27846 for Anime Fighting), start local discovery responder
+		if e.cfg.DiscoveryPort > 0 {
+			discAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", e.cfg.DiscoveryPort))
+			if err == nil {
+				discConn, err := net.ListenUDP("udp4", discAddr)
+				if err == nil {
+					e.udpDiscoveryListener = discConn
+					log.Printf("[Tunnel Client] Listening for LAN discovery queries on %s", discConn.LocalAddr().String())
+					go e.readDiscoveryLoop()
+				}
+			}
+		}
 	} else {
-		log.Printf("[Tunnel Host] Ready to pipe incoming streams to local game port 127.0.0.1:%d", e.cfg.GamePort)
+		log.Printf("[Tunnel Host] Ready to pipe incoming streams/packets to local game port 127.0.0.1:%d", e.cfg.GamePort)
 	}
 
 	return nil
@@ -219,8 +261,18 @@ func (e *TunnelEngine) pingLoop() {
 	}
 }
 
-// GetListenPort returns the local TCP port this client is listening on.
+// GetListenPort returns the local TCP/UDP port this client is listening on.
 func (e *TunnelEngine) GetListenPort() int {
+	return e.cfg.GamePort
+}
+
+// GetUDPListenPort returns the local UDP port this client is listening on.
+func (e *TunnelEngine) GetUDPListenPort() int {
+	if e.udpListener != nil {
+		if addr, ok := e.udpListener.LocalAddr().(*net.UDPAddr); ok {
+			return addr.Port
+		}
+	}
 	return e.cfg.GamePort
 }
 
@@ -235,6 +287,23 @@ func (e *TunnelEngine) Stop() {
 	if e.listener != nil {
 		_ = e.listener.Close()
 	}
+
+	if e.udpListener != nil {
+		_ = e.udpListener.Close()
+	}
+
+	if e.udpDiscoveryListener != nil {
+		_ = e.udpDiscoveryListener.Close()
+	}
+
+	e.udpMu.Lock()
+	for key, conn := range e.hostUDPSessions {
+		_ = conn.Close()
+		delete(e.hostUDPSessions, key)
+	}
+	e.clientUDPSessions = make(map[string]uint32)
+	e.clientUDPSrcAddrs = make(map[uint32]*net.UDPAddr)
+	e.udpMu.Unlock()
 
 	e.streamsMu.Lock()
 	for id, conn := range e.streams {
@@ -359,6 +428,64 @@ func (e *TunnelEngine) acceptGameClients() {
 	}
 }
 
+// readClientUDPLoop listens for incoming UDP game datagrams and multiplexes them over WebSocket
+func (e *TunnelEngine) readClientUDPLoop() {
+	buf := make([]byte, 65535)
+	for {
+		select {
+		case <-e.stopChan:
+			return
+		default:
+		}
+
+		_ = e.udpListener.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, srcAddr, err := e.udpListener.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+
+		addrKey := srcAddr.String()
+		e.udpMu.Lock()
+		streamID, exists := e.clientUDPSessions[addrKey]
+		if !exists {
+			streamID = atomic.AddUint32(&e.nextStream, 1)
+			e.clientUDPSessions[addrKey] = streamID
+			e.clientUDPSrcAddrs[streamID] = srcAddr
+			log.Printf("[Tunnel Client] New UDP game session stream #%d from %s", streamID, addrKey)
+		}
+		e.udpMu.Unlock()
+
+		target := e.cfg.TargetPeerID
+		_ = e.sendFrameTo(target, FrameUDPData, streamID, buf[:n])
+	}
+}
+
+// readDiscoveryLoop answers LAN discovery queries for games like Anime Fighting
+func (e *TunnelEngine) readDiscoveryLoop() {
+	buf := make([]byte, 2048)
+	for {
+		select {
+		case <-e.stopChan:
+			return
+		default:
+		}
+
+		_ = e.udpDiscoveryListener.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, remoteAddr, err := e.udpDiscoveryListener.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+
+		reqStr := string(buf[:n])
+		// Anime Fighting discovery query
+		if strings.Contains(reqStr, "ANIME_FIGHT_ROOM_SEARCH_V1") {
+			reply := []byte("ANIME_FIGHT_ROOM_READY_V1")
+			_, _ = e.udpDiscoveryListener.WriteToUDP(reply, remoteAddr)
+			log.Printf("[Tunnel Discovery] Responded to Anime Fighting discovery query from %s", remoteAddr.String())
+		}
+	}
+}
+
 // handleBinaryFrame decodes [senderLen:1B][senderPeerID:NB][frameType:1B][streamId:4B][payload]
 func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 	if len(raw) < 7 {
@@ -432,6 +559,62 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 		e.streamsMu.RUnlock()
 		if exists && len(payload) > 0 {
 			_, _ = conn.Write(payload)
+		}
+
+	case FrameUDPData:
+		if e.cfg.IsHost {
+			sessKey := fmt.Sprintf("%s:%d", senderID, streamID)
+			e.udpMu.Lock()
+			gameConn, exists := e.hostUDPSessions[sessKey]
+			if !exists {
+				gameAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", e.cfg.GamePort))
+				if err == nil {
+					conn, err := net.DialUDP("udp4", nil, gameAddr)
+					if err == nil {
+						gameConn = conn
+						e.hostUDPSessions[sessKey] = conn
+						log.Printf("[Tunnel Host] Created UDP forwarder for peer %s stream #%d -> local game 127.0.0.1:%d", senderID, streamID, e.cfg.GamePort)
+
+						go func(key string, targetClient string, sID uint32, c *net.UDPConn) {
+							defer func() {
+								e.udpMu.Lock()
+								delete(e.hostUDPSessions, key)
+								e.udpMu.Unlock()
+								_ = c.Close()
+								log.Printf("[Tunnel Host] UDP forwarder closed for %s", key)
+							}()
+
+							replyBuf := make([]byte, 65535)
+							for {
+								if !e.running.Load() {
+									return
+								}
+								_ = c.SetReadDeadline(time.Now().Add(60 * time.Second))
+								rn, rerr := c.Read(replyBuf)
+								if rn > 0 {
+									_ = e.sendFrameTo(targetClient, FrameUDPData, sID, replyBuf[:rn])
+								}
+								if rerr != nil {
+									return
+								}
+							}
+						}(sessKey, senderID, streamID, conn)
+					}
+				}
+			}
+			e.udpMu.Unlock()
+
+			if gameConn != nil && len(payload) > 0 {
+				_, _ = gameConn.Write(payload)
+			}
+		} else {
+			e.udpMu.RLock()
+			srcAddr, exists := e.clientUDPSrcAddrs[streamID]
+			e.udpMu.RUnlock()
+
+			if exists && e.udpListener != nil && len(payload) > 0 {
+				_, _ = e.udpListener.WriteToUDP(payload, srcAddr)
+			}
 		}
 
 	case FrameClose:

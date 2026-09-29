@@ -62,3 +62,40 @@ func TestRelayManagerSubscribeUnsubscribe(t *testing.T) {
 		t.Fatalf("expected 0 listeners after Stop, got %d", len(mgr.listeners))
 	}
 }
+
+func TestAnimeFightingPacketParsing(t *testing.T) {
+	mgr := NewRelayManager()
+	ch := mgr.Subscribe()
+	defer mgr.Unsubscribe(ch)
+
+	samplePacket := []byte("ANIME_FIGHT_ROOM_READY_V1")
+	dummyAddr := &net.UDPAddr{
+		IP:   net.ParseIP("192.168.1.120"),
+		Port: 27846,
+	}
+
+	mgr.parsePacket(samplePacket, dummyAddr)
+
+	select {
+	case game := <-ch:
+		if game.Port != 27845 {
+			t.Fatalf("expected port 27845, got %d", game.Port)
+		}
+		if game.GameName != "Anime Fighting" {
+			t.Fatalf("expected gameName 'Anime Fighting', got '%s'", game.GameName)
+		}
+		if game.HostIP != "192.168.1.120" {
+			t.Fatalf("expected host IP '192.168.1.120', got '%s'", game.HostIP)
+		}
+		if game.Protocol != "UDP" {
+			t.Fatalf("expected protocol UDP, got %s", game.Protocol)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for discovered game emit")
+	}
+
+	active := mgr.GetActiveGames()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active game, got %d", len(active))
+	}
+}

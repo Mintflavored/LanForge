@@ -89,12 +89,13 @@ func (s *Server) Handler() http.Handler {
 		}
 
 		var req struct {
-			HubURL       string `json:"hubUrl"`
-			RoomCode     string `json:"roomCode"`
-			IsHost       bool   `json:"isHost"`
-			PeerID       string `json:"peerId"`
-			TargetPeerID string `json:"targetPeerId"`
-			GamePort     int    `json:"gamePort"`
+			HubURL        string `json:"hubUrl"`
+			RoomCode      string `json:"roomCode"`
+			IsHost        bool   `json:"isHost"`
+			PeerID        string `json:"peerId"`
+			TargetPeerID  string `json:"targetPeerId"`
+			GamePort      int    `json:"gamePort"`
+			DiscoveryPort int    `json:"discoveryPort"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -108,12 +109,13 @@ func (s *Server) Handler() http.Handler {
 		}
 
 		eng := tunnel.NewTunnelEngine(tunnel.EngineConfig{
-			HubURL:       req.HubURL,
-			RoomCode:     req.RoomCode,
-			IsHost:       req.IsHost,
-			MyPeerID:     req.PeerID,
-			TargetPeerID: req.TargetPeerID,
-			GamePort:     req.GamePort,
+			HubURL:        req.HubURL,
+			RoomCode:      req.RoomCode,
+			IsHost:        req.IsHost,
+			MyPeerID:      req.PeerID,
+			TargetPeerID:  req.TargetPeerID,
+			GamePort:      req.GamePort,
+			DiscoveryPort: req.DiscoveryPort,
 		})
 		if err := eng.Start(); err != nil {
 			s.tunnelMu.Unlock()

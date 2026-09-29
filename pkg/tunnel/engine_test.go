@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -148,4 +149,164 @@ func TestTunnelEngineEndToEnd(t *testing.T) {
 	}
 
 	t.Logf("SUCCESS: Tunnel relayed %d bytes seamlessly through WebSocket bridge!", n)
+}
+
+func TestTunnelEngineUDPEndToEnd(t *testing.T) {
+	// 1. Start local UDP Echo Server (simulating Anime Fighting / ENet Game Server on host)
+	udpEchoConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("Failed to start UDP echo server: %v", err)
+	}
+	defer udpEchoConn.Close()
+
+	echoPort := udpEchoConn.LocalAddr().(*net.UDPAddr).Port
+
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, clientAddr, err := udpEchoConn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			// Echo back payload to sender
+			_, _ = udpEchoConn.WriteToUDP(buf[:n], clientAddr)
+		}
+	}()
+
+	// 2. Start mock signaling hub
+	var (
+		hubConns = make(map[string]*websocket.Conn)
+		hubMu    sync.Mutex
+		upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	)
+
+	hubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		var peerID string
+		for {
+			msgType, raw, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+			if msgType == websocket.TextMessage {
+				var reg struct {
+					Type   string `json:"type"`
+					PeerID string `json:"peerId"`
+				}
+				if err := json.Unmarshal(raw, &reg); err == nil && reg.Type == "tunnel_register" {
+					peerID = reg.PeerID
+					hubMu.Lock()
+					hubConns[peerID] = conn
+					hubMu.Unlock()
+				}
+			} else if msgType == websocket.BinaryMessage {
+				if len(raw) > 1 {
+					tLen := int(raw[0])
+					if len(raw) >= 1+tLen {
+						tID := string(raw[1 : 1+tLen])
+						hubMu.Lock()
+						dst := hubConns[tID]
+						hubMu.Unlock()
+						if dst != nil {
+							_ = dst.WriteMessage(websocket.BinaryMessage, raw[1+tLen:])
+						}
+					}
+				}
+			}
+		}
+		hubMu.Lock()
+		delete(hubConns, peerID)
+		hubMu.Unlock()
+	}))
+	defer hubServer.Close()
+
+	hubURL := strings.Replace(hubServer.URL, "http://", "ws://", 1)
+
+	// 3. Start Host Tunnel Engine
+	hostEngine := NewTunnelEngine(EngineConfig{
+		HubURL:       hubURL,
+		RoomCode:     "ANIME-999",
+		IsHost:       true,
+		MyPeerID:     "host_fighter",
+		TargetPeerID: "client_fighter",
+		GamePort:     echoPort,
+	})
+	if err := hostEngine.Start(); err != nil {
+		t.Fatalf("Host engine failed to start: %v", err)
+	}
+	defer hostEngine.Stop()
+
+	// 4. Start Client Tunnel Engine with DiscoveryPort
+	discoveryPort := 27846
+	clientEngine := NewTunnelEngine(EngineConfig{
+		HubURL:        hubURL,
+		RoomCode:      "ANIME-999",
+		IsHost:        false,
+		MyPeerID:      "client_fighter",
+		TargetPeerID:  "host_fighter",
+		GamePort:      0, // Dynamic port
+		DiscoveryPort: discoveryPort,
+	})
+	if err := clientEngine.Start(); err != nil {
+		t.Fatalf("Client engine failed to start: %v", err)
+	}
+	defer clientEngine.Stop()
+
+	time.Sleep(150 * time.Millisecond)
+
+	clientPort := clientEngine.GetUDPListenPort()
+	if clientPort == 0 {
+		t.Fatalf("ClientEngine has invalid UDP listen port 0")
+	}
+
+	// 5. Connect simulated Anime Fighting client via UDP
+	gameClient, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: clientPort})
+	if err != nil {
+		t.Fatalf("Game client failed to dial tunnel UDP port: %v", err)
+	}
+	defer gameClient.Close()
+
+	// 6. Send test ENet game datagram
+	testPayload := []byte("ANIME_FIGHT_P2P_DATAGRAM_TEST_PACKET_V1")
+	if _, err := gameClient.Write(testPayload); err != nil {
+		t.Fatalf("Failed to send UDP datagram: %v", err)
+	}
+
+	recvBuf := make([]byte, 2048)
+	_ = gameClient.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := gameClient.Read(recvBuf)
+	if err != nil {
+		t.Fatalf("Failed to receive echoed UDP datagram: %v", err)
+	}
+
+	if !bytes.Equal(recvBuf[:n], testPayload) {
+		t.Fatalf("UDP echo mismatch! Got: %s, Expected: %s", string(recvBuf[:n]), string(testPayload))
+	}
+	t.Logf("SUCCESS: Tunnel relayed %d UDP bytes across WebSocket bridge!", n)
+
+	// 7. Test Discovery Query (simulating client searching for LAN rooms)
+	if clientEngine.udpDiscoveryListener != nil {
+		discSender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: discoveryPort})
+		if err != nil {
+			t.Fatalf("Failed to dial discovery port: %v", err)
+		}
+		defer discSender.Close()
+
+		_, _ = discSender.Write([]byte("ANIME_FIGHT_ROOM_SEARCH_V1"))
+		discBuf := make([]byte, 256)
+		_ = discSender.SetReadDeadline(time.Now().Add(2 * time.Second))
+		dn, err := discSender.Read(discBuf)
+		if err != nil {
+			t.Fatalf("Failed to read discovery response: %v", err)
+		}
+		if string(discBuf[:dn]) != "ANIME_FIGHT_ROOM_READY_V1" {
+			t.Fatalf("Unexpected discovery response: %s", string(discBuf[:dn]))
+		}
+		t.Logf("SUCCESS: Discovery responder returned %s!", string(discBuf[:dn]))
+	}
 }

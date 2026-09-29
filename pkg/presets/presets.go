@@ -151,6 +151,18 @@ var AllPresets = []GamePreset{
 		Description:           "Реалистичный автосимулятор. Сервер поднимается через acServer.exe.",
 		ConnectHint:           "Content Manager -> Drive -> LAN -> Сервер хоста",
 	},
+	{
+		ID:                    "anime_fighting",
+		Name:                  "Anime Fighting",
+		Category:              "Fighting",
+		DefaultPort:           27845,
+		Protocol:              "udp",
+		Color:                 "#ec4899",
+		LanDiscoverySupported: true,
+		DiscoveryPort:         27846,
+		Description:           "2D-платформенный аниме-файтинг в стиле Brawlhalla. Поддерживает LAN-лобби и автопоиск комнат!",
+		ConnectHint:           "Онлайн · LAN / VPN -> Присоединиться (или ввести {HOST_IP}:27845)",
+	},
 }
 
 // FindPreset looks up a game preset by ID.

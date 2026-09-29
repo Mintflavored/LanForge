@@ -81,6 +81,9 @@ func (r *RelayManager) Start() {
 
 	// 2. Secondary listener on Multicast 224.0.2.60:4445 (Minecraft LAN standard)
 	go r.listenMulticast("224.0.2.60:4445")
+
+	// 3. Scan Anime Fighting rooms on LAN
+	go r.scanAnimeFightingRooms()
 }
 
 // Unsubscribe removes a channel from listeners.
@@ -225,5 +228,68 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 			Motd:       motd,
 			Extra:      motd,
 		})
+	}
+
+	// Anime Fighting LAN format: ANIME_FIGHT_ROOM_READY_V1
+	if strings.Contains(text, "ANIME_FIGHT_ROOM_READY_V1") {
+		hostIP := "127.0.0.1"
+		if udpAddr, ok := src.(*net.UDPAddr); ok {
+			hostIP = udpAddr.IP.String()
+		}
+
+		r.emit(DiscoveredGame{
+			ID:         fmt.Sprintf("animefight_%s_%d", hostIP, 27845),
+			GameName:   "Anime Fighting",
+			Name:       "Anime Fighting (LAN комната)",
+			HostNick:   "Local Host",
+			HostIP:     hostIP,
+			IP:         hostIP,
+			Port:       27845,
+			Protocol:   "UDP",
+			DetectedAt: time.Now().UnixMilli(),
+			Motd:       "Комната готова к бою",
+			Extra:      "2D Platform Fighter (ENet)",
+		})
+	}
+}
+
+func (r *RelayManager) scanAnimeFightingRooms() {
+	addr, err := net.ResolveUDPAddr("udp4", ":0")
+	if err != nil {
+		return
+	}
+	conn, err := net.ListenUDP("udp4", addr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	destAddr, err := net.ResolveUDPAddr("udp4", "255.255.255.255:27846")
+	if err != nil {
+		return
+	}
+
+	searchPacket := []byte("ANIME_FIGHT_ROOM_SEARCH_V1")
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// Initial probe
+	_, _ = conn.WriteTo(searchPacket, destAddr)
+
+	buf := make([]byte, 2048)
+	for {
+		select {
+		case <-r.stopChan:
+			return
+		case <-ticker.C:
+			_, _ = conn.WriteTo(searchPacket, destAddr)
+		default:
+		}
+
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		n, src, err := conn.ReadFrom(buf)
+		if err == nil && n > 0 {
+			r.parsePacket(buf[:n], src)
+		}
 	}
 }

@@ -38,4 +38,12 @@ func TestFindPreset(t *testing.T) {
 	if notFound != nil {
 		t.Error("expected non_existent_game_xyz to be nil")
 	}
+
+	af := FindPreset("anime_fighting")
+	if af == nil {
+		t.Fatal("expected to find anime_fighting preset")
+	}
+	if af.DefaultPort != 27845 || af.Protocol != "udp" || af.DiscoveryPort != 27846 {
+		t.Errorf("unexpected anime_fighting preset values: %+v", af)
+	}
 }
