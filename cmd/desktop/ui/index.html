@@ -2433,7 +2433,9 @@
     }
 
     function renderSparkline() {
+      if (document.hidden) return;
       const pathEl = document.getElementById("sparkline-path");
+      if (!pathEl) return;
       const w = 200;
       const h = 40;
       const step = w / (pingHistory.length - 1);
@@ -3631,16 +3633,18 @@
 
     function startTunnelTelemetry() {
       if (tunnelPollTimer) clearInterval(tunnelPollTimer);
-      tunnelPollTimer = setInterval(() => {
+      const poll = () => {
         if (!currentRoom) return;
         fetch("http://127.0.0.1:8787/api/tunnel/status")
           .then(res => res.json())
           .then(status => {
             if (status.running) {
-              const upKb = (status.bytesUp / 1024).toFixed(1);
-              const downKb = (status.bytesDown / 1024).toFixed(1);
-              const lbl = document.getElementById("tunnel-traffic-lbl");
-              if (lbl) lbl.textContent = `↑ ${upKb} КБ | ↓ ${downKb} КБ`;
+              if (!document.hidden) {
+                const upKb = (status.bytesUp / 1024).toFixed(1);
+                const downKb = (status.bytesDown / 1024).toFixed(1);
+                const lbl = document.getElementById("tunnel-traffic-lbl");
+                if (lbl) lbl.textContent = `↑ ${upKb} КБ | ↓ ${downKb} КБ`;
+              }
             } else if (currentRoom) {
               // Watchdog: auto-restart tunnel if it stopped unexpectedly
               Logger.warn("Watchdog", "Tunnel stopped unexpectedly, recovering...");
@@ -3648,8 +3652,24 @@
             }
           })
           .catch(() => {});
-      }, 2000);
+      };
+      const interval = document.hidden ? 8000 : 2000;
+      tunnelPollTimer = setInterval(poll, interval);
+      poll();
     }
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        renderSparkline();
+        if (currentRoom) {
+          startTunnelTelemetry();
+        }
+      } else {
+        if (currentRoom) {
+          startTunnelTelemetry();
+        }
+      }
+    });
 
     function leaveRoom() {
       hasAnnouncedSteamHost = false;

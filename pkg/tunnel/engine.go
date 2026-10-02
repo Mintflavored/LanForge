@@ -1,10 +1,12 @@
 package tunnel
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -20,6 +22,12 @@ const (
 	FrameClose   byte = 0x03
 	FrameUDPData byte = 0x04
 )
+
+// udpSessionKey provides a zero-alloc composite map key for host UDP session routing.
+type udpSessionKey struct {
+	senderID string
+	streamID uint32
+}
 
 // EngineConfig configures a game tunnel instance.
 type EngineConfig struct {
@@ -51,9 +59,20 @@ type TunnelEngine struct {
 	udpListener          *net.UDPConn
 	udpDiscoveryListener *net.UDPConn
 	udpMu                sync.RWMutex
-	clientUDPSessions    map[string]uint32       // "ip:port" -> streamID
+	clientUDPSessions    map[netip.AddrPort]uint32
 	clientUDPSrcAddrs    map[uint32]*net.UDPAddr // streamID -> srcAddr
-	hostUDPSessions      map[string]*net.UDPConn // "senderID:streamID" -> dial conn to local game
+	hostUDPSessions      map[udpSessionKey]*net.UDPConn
+
+	// Cached zero-alloc buffers
+	myPeerBytes     []byte
+	targetPeerBytes []byte
+}
+
+var frameBufferPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 2048)
+		return &b
+	},
 }
 
 // NewTunnelEngine creates a new game tunnel engine.
@@ -63,9 +82,11 @@ func NewTunnelEngine(cfg EngineConfig) *TunnelEngine {
 		streams:           make(map[uint32]net.Conn),
 		streamPeers:       make(map[uint32]string),
 		stopChan:          make(chan struct{}),
-		clientUDPSessions: make(map[string]uint32),
+		clientUDPSessions: make(map[netip.AddrPort]uint32),
 		clientUDPSrcAddrs: make(map[uint32]*net.UDPAddr),
-		hostUDPSessions:   make(map[string]*net.UDPConn),
+		hostUDPSessions:   make(map[udpSessionKey]*net.UDPConn),
+		myPeerBytes:       []byte(cfg.MyPeerID),
+		targetPeerBytes:   []byte(cfg.TargetPeerID),
 	}
 }
 
@@ -305,7 +326,7 @@ func (e *TunnelEngine) Stop() {
 		_ = conn.Close()
 		delete(e.hostUDPSessions, key)
 	}
-	e.clientUDPSessions = make(map[string]uint32)
+	e.clientUDPSessions = make(map[netip.AddrPort]uint32)
 	e.clientUDPSrcAddrs = make(map[uint32]*net.UDPAddr)
 	e.udpMu.Unlock()
 
@@ -325,6 +346,30 @@ func (e *TunnelEngine) Stop() {
 	e.wsWriteMu.Unlock()
 
 	log.Printf("[Tunnel] Engine stopped cleanly.")
+}
+
+// buildFrame serializes the wire protocol frame into dst:
+// [targetLen:1B][targetPeerID:NB][senderLen:1B][senderPeerID:NB][frameType:1B][streamId:4B][payload...]
+func buildFrame(dst, targetBytes, myBytes []byte, frameType byte, streamID uint32, payload []byte) int {
+	targetLen := byte(len(targetBytes))
+	myLen := byte(len(myBytes))
+
+	dst[0] = targetLen
+	copy(dst[1:1+targetLen], targetBytes)
+
+	offset := 1 + int(targetLen)
+	dst[offset] = myLen
+	copy(dst[offset+1:offset+1+int(myLen)], myBytes)
+
+	offset += 1 + int(myLen)
+	dst[offset] = frameType
+	binary.BigEndian.PutUint32(dst[offset+1:offset+5], streamID)
+
+	if len(payload) > 0 {
+		copy(dst[offset+5:], payload)
+	}
+
+	return offset + 5 + len(payload)
 }
 
 // sendFrameTo sends:
@@ -350,32 +395,37 @@ func (e *TunnelEngine) sendFrameTo(targetPeerID string, frameType byte, streamID
 		return fmt.Errorf("websocket currently reconnecting")
 	}
 
-	targetBytes := []byte(targetPeerID)
-	targetLen := byte(len(targetBytes))
-
-	myBytes := []byte(e.cfg.MyPeerID)
-	myLen := byte(len(myBytes))
-
-	totalLen := 1 + int(targetLen) + 1 + int(myLen) + 1 + 4 + len(payload)
-	buf := make([]byte, totalLen)
-
-	buf[0] = targetLen
-	copy(buf[1:1+targetLen], targetBytes)
-
-	offset := 1 + int(targetLen)
-	buf[offset] = myLen
-	copy(buf[offset+1:offset+1+int(myLen)], myBytes)
-
-	offset += 1 + int(myLen)
-	buf[offset] = frameType
-	binary.BigEndian.PutUint32(buf[offset+1:offset+5], streamID)
-
-	if len(payload) > 0 {
-		copy(buf[offset+5:], payload)
+	var targetBytes []byte
+	if targetPeerID == e.cfg.TargetPeerID && len(e.targetPeerBytes) > 0 {
+		targetBytes = e.targetPeerBytes
+	} else {
+		targetBytes = []byte(targetPeerID)
 	}
 
+	myBytes := e.myPeerBytes
+	if len(myBytes) == 0 {
+		myBytes = []byte(e.cfg.MyPeerID)
+	}
+
+	totalLen := 1 + len(targetBytes) + 1 + len(myBytes) + 1 + 4 + len(payload)
+
+	var buf []byte
+	var pooledBuf *[]byte
+	if totalLen <= 2048 {
+		pooledBuf = frameBufferPool.Get().(*[]byte)
+		buf = (*pooledBuf)[:totalLen]
+	} else {
+		buf = make([]byte, totalLen)
+	}
+
+	_ = buildFrame(buf, targetBytes, myBytes, frameType, streamID, payload)
+
 	e.BytesUp.Add(uint64(len(payload)))
-	return e.wsConn.WriteMessage(websocket.BinaryMessage, buf)
+	err := e.wsConn.WriteMessage(websocket.BinaryMessage, buf)
+	if pooledBuf != nil {
+		frameBufferPool.Put(pooledBuf)
+	}
+	return err
 }
 
 // acceptGameClients listens for local Minecraft connections (on friend's PC)
@@ -448,14 +498,14 @@ func (e *TunnelEngine) readClientUDPLoop() {
 			continue
 		}
 
-		addrKey := srcAddr.String()
+		addrKey := srcAddr.AddrPort()
 		e.udpMu.Lock()
 		streamID, exists := e.clientUDPSessions[addrKey]
 		if !exists {
 			streamID = atomic.AddUint32(&e.nextStream, 1)
 			e.clientUDPSessions[addrKey] = streamID
 			e.clientUDPSrcAddrs[streamID] = srcAddr
-			log.Printf("[Tunnel Client] New UDP game session stream #%d from %s", streamID, addrKey)
+			log.Printf("[Tunnel Client] New UDP game session stream #%d from %s", streamID, addrKey.String())
 		}
 		e.udpMu.Unlock()
 
@@ -535,7 +585,13 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 	if len(raw) < 1+senderLen+5 {
 		return
 	}
-	senderID := string(raw[1 : 1+senderLen])
+
+	var senderID string
+	if bytes.Equal(raw[1:1+senderLen], e.targetPeerBytes) {
+		senderID = e.cfg.TargetPeerID
+	} else {
+		senderID = string(raw[1 : 1+senderLen])
+	}
 
 	offset := 1 + senderLen
 	frameType := raw[offset]
@@ -602,7 +658,7 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 
 	case FrameUDPData:
 		if e.cfg.IsHost {
-			sessKey := fmt.Sprintf("%s:%d", senderID, streamID)
+			sessKey := udpSessionKey{senderID: senderID, streamID: streamID}
 			e.udpMu.Lock()
 			gameConn, exists := e.hostUDPSessions[sessKey]
 			if !exists {
@@ -614,13 +670,13 @@ func (e *TunnelEngine) handleBinaryFrame(raw []byte) {
 						e.hostUDPSessions[sessKey] = conn
 						log.Printf("[Tunnel Host] Created UDP forwarder for peer %s stream #%d -> local game 127.0.0.1:%d", senderID, streamID, e.cfg.GamePort)
 
-						go func(key string, targetClient string, sID uint32, c *net.UDPConn) {
+						go func(key udpSessionKey, targetClient string, sID uint32, c *net.UDPConn) {
 							defer func() {
 								e.udpMu.Lock()
 								delete(e.hostUDPSessions, key)
 								e.udpMu.Unlock()
 								_ = c.Close()
-								log.Printf("[Tunnel Host] UDP forwarder closed for %s", key)
+								log.Printf("[Tunnel Host] UDP forwarder closed for %s:%d", key.senderID, key.streamID)
 							}()
 
 							replyBuf := make([]byte, 65535)

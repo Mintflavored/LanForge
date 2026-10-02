@@ -310,3 +310,63 @@ func TestTunnelEngineUDPEndToEnd(t *testing.T) {
 		t.Logf("SUCCESS: Discovery responder returned %s!", string(discBuf[:dn]))
 	}
 }
+
+// BenchmarkBuildFrame_BaselineMake measures the old pattern: allocating string-to-byte slices and make([]byte) on every packet
+func BenchmarkBuildFrame_BaselineMake(b *testing.B) {
+	targetPeerID := "peer_client_abc123"
+	myPeerID := "peer_host_xyz789"
+	payload := make([]byte, 1200) // typical game UDP packet size
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		targetBytes := []byte(targetPeerID)
+		targetLen := byte(len(targetBytes))
+		myBytes := []byte(myPeerID)
+		myLen := byte(len(myBytes))
+
+		totalLen := 1 + int(targetLen) + 1 + int(myLen) + 1 + 4 + len(payload)
+		buf := make([]byte, totalLen)
+
+		buf[0] = targetLen
+		copy(buf[1:1+targetLen], targetBytes)
+
+		offset := 1 + int(targetLen)
+		buf[offset] = myLen
+		copy(buf[offset+1:offset+1+int(myLen)], myBytes)
+
+		offset += 1 + int(myLen)
+		buf[offset] = FrameData
+		buf[offset+1] = 0
+		buf[offset+2] = 0
+		buf[offset+3] = 0
+		buf[offset+4] = 1
+
+		if len(payload) > 0 {
+			copy(buf[offset+5:], payload)
+		}
+		_ = buf
+	}
+}
+
+// BenchmarkBuildFrame_ZeroAlloc measures the optimized zero-alloc pattern with frameBufferPool and cached byte slices
+func BenchmarkBuildFrame_ZeroAlloc(b *testing.B) {
+	targetBytes := []byte("peer_client_abc123")
+	myBytes := []byte("peer_host_xyz789")
+	payload := make([]byte, 1200)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		totalLen := 1 + len(targetBytes) + 1 + len(myBytes) + 1 + 4 + len(payload)
+		pooledBuf := frameBufferPool.Get().(*[]byte)
+		buf := (*pooledBuf)[:totalLen]
+
+		_ = buildFrame(buf, targetBytes, myBytes, FrameData, 1, payload)
+
+		frameBufferPool.Put(pooledBuf)
+	}
+}
+
