@@ -173,6 +173,9 @@
       color: var(--text-main);
       transform: translateY(-1px);
     }
+    .btn-icon:active {
+      transform: translateY(1px) scale(0.95);
+    }
     .btn-icon svg {
       width: 15px;
       height: 15px;
@@ -187,7 +190,7 @@
       border-radius: 7px;
       cursor: pointer;
       border: 1px solid transparent;
-      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -195,6 +198,9 @@
       letter-spacing: 0.01em;
       white-space: nowrap;
       flex-shrink: 0;
+    }
+    .btn:active {
+      transform: translateY(1px) scale(0.98);
     }
 
     .btn-primary {
@@ -207,6 +213,10 @@
       box-shadow: 0 4px 18px rgba(255, 85, 0, 0.42);
       transform: translateY(-1px);
     }
+    .btn-primary:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 1px 6px rgba(255, 85, 0, 0.3);
+    }
 
     .btn-secondary {
       background: var(--card);
@@ -217,6 +227,10 @@
       background: #1c1c22;
       border-color: #3f3f46;
       transform: translateY(-1px);
+    }
+    .btn-secondary:active {
+      transform: translateY(1px) scale(0.98);
+      background: #16161a;
     }
 
     .btn-sm {
@@ -236,17 +250,17 @@
     .view-pane {
       display: none;
       height: 100%;
-      animation: view-fade-in 0.12s ease-out;
     }
 
     .view-pane.active {
       display: flex;
       flex-direction: column;
+      animation: view-fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @keyframes view-fade-in {
-      from { opacity: 0.6; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(8px) scale(0.995); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     /* BENTO GRID (OVERVIEW) */
@@ -265,6 +279,10 @@
       display: flex;
       flex-direction: column;
       position: relative;
+      transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
     }
 
     .card-title-badge {
@@ -307,6 +325,10 @@
       align-items: center;
       justify-content: space-between;
       margin: 10px 0;
+      transition: border-color 0.18s ease;
+    }
+    .connect-box:hover {
+      border-color: rgba(255, 255, 255, 0.15);
     }
 
     .peer-row {
@@ -315,9 +337,15 @@
       justify-content: space-between;
       background: #18181c;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 8px 12px;
       margin-bottom: 6px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .peer-row:hover {
+      background: #1f1f26;
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateX(2px);
     }
 
     .online-dot {
@@ -328,7 +356,7 @@
       display: inline-block;
       margin-right: 8px;
       box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
-      animation: pulse-dot 2s infinite ease-in-out;
+      animation: pulse-dot 2.2s infinite ease-in-out;
     }
 
     /* TELEMETRY & SPARKLINE */
@@ -438,6 +466,24 @@
       margin: 0 10px;
       position: relative;
     }
+    .topo-line::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: 0;
+      width: 14px;
+      height: 6px;
+      border-radius: 3px;
+      background: #fff;
+      box-shadow: 0 0 8px #fff, 0 0 14px var(--accent);
+      animation: topoPulse 2.4s infinite ease-in-out;
+    }
+    @keyframes topoPulse {
+      0% { left: 0%; opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { left: calc(100% - 14px); opacity: 0; }
+    }
 
     .topo-label {
       font-size: 10px;
@@ -527,16 +573,18 @@
     .game-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 12px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      transition: border-color 0.12s, transform 0.12s;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .game-card:hover {
-      border-color: var(--border-focus);
+      border-color: rgba(255, 85, 0, 0.45);
       background: var(--card-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 85, 0, 0.12);
     }
 
     /* TOAST BANNER */
@@ -554,23 +602,25 @@
     }
 
     .toast {
-      background: #18181c;
+      background: rgba(24, 24, 28, 0.95);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--accent);
       color: #fff;
       font-size: 12px;
       font-weight: 700;
-      padding: 8px 18px;
-      border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      padding: 9px 20px;
+      border-radius: 9px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 0 16px rgba(255, 85, 0, 0.25);
       display: flex;
       align-items: center;
       gap: 8px;
-      animation: toast-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
     @keyframes toast-in {
-      from { opacity: 0; transform: translateY(-16px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(-20px) scale(0.92); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     /* MODAL DIALOGS */
@@ -586,6 +636,7 @@
     }
     .modal-overlay.active {
       display: flex;
+      animation: modalOverlayFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .modal-box {
@@ -595,6 +646,19 @@
       width: 420px;
       padding: 24px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.8);
+      transform-origin: center;
+    }
+    .modal-overlay.active .modal-box {
+      animation: modalBoxPop 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalOverlayFade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes modalBoxPop {
+      from { opacity: 0; transform: scale(0.93) translateY(12px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
     }
 
     .input-field {
@@ -607,9 +671,11 @@
       font-size: 13px;
       margin: 6px 0 14px;
       outline: none;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .input-field:focus {
       border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(255, 85, 0, 0.2);
     }
 
     /* SCROLLBAR STYLING */
@@ -683,10 +749,12 @@
       height: 8px;
       border-radius: 50%;
       flex-shrink: 0;
+      transition: all 0.2s ease;
     }
     .status-dot.online {
       background: var(--green);
       box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      animation: pulse-online 2.5s infinite ease-in-out;
     }
     .status-dot.offline {
       background: var(--text-dim);
@@ -694,10 +762,81 @@
     .status-dot.warning {
       background: var(--amber);
       box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+      animation: pulse-warning 1.8s infinite ease-in-out;
     }
     .status-dot.accent {
       background: var(--accent);
       box-shadow: 0 0 6px rgba(255, 85, 0, 0.6);
+      animation: pulse-accent 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-online {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+      50% { transform: scale(1.15); box-shadow: 0 0 12px rgba(34, 197, 94, 0.9); }
+    }
+    @keyframes pulse-warning {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.9); opacity: 0.55; }
+    }
+    @keyframes pulse-accent {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 6px rgba(255, 85, 0, 0.6); }
+      50% { transform: scale(1.2); box-shadow: 0 0 14px rgba(255, 85, 0, 0.95); }
+    }
+
+    /* RADAR SCAN & CHAT ANIMATIONS */
+    .radar-scan-bar {
+      position: relative;
+      overflow: hidden;
+    }
+    .radar-scan-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 80px;
+      background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.22), transparent);
+      animation: radarScanSweep 3s infinite linear;
+      pointer-events: none;
+    }
+    @keyframes radarScanSweep {
+      0% { left: -80px; }
+      100% { left: 100%; }
+    }
+
+    .radar-game-card {
+      animation: radarCardIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes radarCardIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .chat-msg-row {
+      animation: chatMsgIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes chatMsgIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    #room-code-btn {
+      position: relative;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #room-code-btn:active {
+      transform: scale(0.96);
+    }
+    #room-code-btn.copied {
+      border-color: var(--green) !important;
+      background: rgba(34, 197, 94, 0.15) !important;
+      color: var(--green) !important;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
+      animation: copyPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes copyPop {
+      0% { transform: scale(0.95); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
     }
 
     /* FRIENDS PANEL & INVITE BANNER */
@@ -1282,7 +1421,7 @@
       <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
         Поиск локальных миров в комнате через широковещательные UDP-пакеты.
       </p>
-      <div class="card" style="padding: 12px 16px; margin-bottom: 12px; flex-direction: row; align-items: center; gap: 8px;">
+      <div class="card radar-scan-bar" style="padding: 12px 16px; margin-bottom: 12px; flex-direction: row; align-items: center; gap: 8px;">
         <span class="online-dot"></span>
         <span style="font-family: var(--font-mono); font-size: 11px; color: var(--green); font-weight: 700;">
           СКАНИРОВАНИЕ UDP & MULTICAST АКТИВНО
@@ -2772,7 +2911,7 @@
       list.innerHTML = "";
       discoveredGames.forEach(g => {
         const card = document.createElement("div");
-        card.className = "peer-row";
+        card.className = "peer-row radar-game-card";
         card.style.padding = "10px 14px";
         card.style.marginBottom = "8px";
         const addrStr = `${g.ip || '10.42.0.1'}:${g.port}`;
@@ -2958,6 +3097,7 @@
     function appendChatMessage(msg) {
       const box = document.getElementById("chat-messages-container");
       const line = document.createElement("div");
+      line.className = "chat-msg-row";
       const d = new Date(msg.timestamp);
       const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const isMe = msg.fromPeerId === myId;
@@ -3695,9 +3835,11 @@
       copyText(currentRoom.code);
       const btn = document.getElementById("room-code-btn");
       if (btn) {
+        btn.classList.add("copied");
         btn.innerHTML = `<span>${escapeHtml(currentRoom.code || "LAN-XXXX")}</span> <svg class="ui-icon ui-icon-sm"><use href="#icon-check"></use></svg>`;
         setTimeout(() => {
           if (btn && currentRoom) {
+            btn.classList.remove("copied");
             btn.innerHTML = `<span>${escapeHtml(currentRoom.code || "LAN-XXXX")}</span> <svg class="ui-icon ui-icon-sm"><use href="#icon-copy"></use></svg>`;
           }
         }, 1200);
