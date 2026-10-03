@@ -531,7 +531,11 @@ func (e *TunnelEngine) startDiscoveryBeacon(port int) {
 	}
 	defer conn.Close()
 
-	beaconMsg := []byte("ANIME_FIGHT_ROOM_READY_V1")
+	// Anime Fighting protocol: v1.4+ expects ANIME_FIGHT_ROOM_READY_V1|<seconds>
+	// where seconds is in [60, 120, 180, 240, 300, 0]. Default is 180 (3 min).
+	// Legacy versions expect ANIME_FIGHT_ROOM_READY_V1 without suffix.
+	beaconMsgNew := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
+	beaconMsgLegacy := []byte("ANIME_FIGHT_ROOM_READY_V1")
 
 	for {
 		select {
@@ -541,9 +545,11 @@ func (e *TunnelEngine) startDiscoveryBeacon(port int) {
 			if !e.running.Load() {
 				return
 			}
-			_, _ = conn.WriteToUDP(beaconMsg, unicastAddr)
+			_, _ = conn.WriteToUDP(beaconMsgNew, unicastAddr)
+			_, _ = conn.WriteToUDP(beaconMsgLegacy, unicastAddr)
 			if broadcastAddr != nil {
-				_, _ = conn.WriteToUDP(beaconMsg, broadcastAddr)
+				_, _ = conn.WriteToUDP(beaconMsgNew, broadcastAddr)
+				_, _ = conn.WriteToUDP(beaconMsgLegacy, broadcastAddr)
 			}
 		}
 	}
@@ -568,8 +574,10 @@ func (e *TunnelEngine) readDiscoveryLoop() {
 		reqStr := string(buf[:n])
 		// Anime Fighting discovery query
 		if strings.Contains(reqStr, "ANIME_FIGHT_ROOM_SEARCH_V1") {
-			reply := []byte("ANIME_FIGHT_ROOM_READY_V1")
-			_, _ = e.udpDiscoveryListener.WriteToUDP(reply, remoteAddr)
+			replyNew := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
+			replyLegacy := []byte("ANIME_FIGHT_ROOM_READY_V1")
+			_, _ = e.udpDiscoveryListener.WriteToUDP(replyNew, remoteAddr)
+			_, _ = e.udpDiscoveryListener.WriteToUDP(replyLegacy, remoteAddr)
 			log.Printf("[Tunnel Discovery] Responded to Anime Fighting discovery query from %s", remoteAddr.String())
 		}
 	}

@@ -304,10 +304,16 @@ func TestTunnelEngineUDPEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to read discovery response: %v", err)
 		}
-		if string(discBuf[:dn]) != "ANIME_FIGHT_ROOM_READY_V1" {
+		if string(discBuf[:dn]) != "ANIME_FIGHT_ROOM_READY_V1|180" {
 			t.Fatalf("Unexpected discovery response: %s", string(discBuf[:dn]))
 		}
 		t.Logf("SUCCESS: Discovery responder returned %s!", string(discBuf[:dn]))
+
+		// Also verify legacy fallback packet is sent
+		dn2, err2 := discSender.Read(discBuf)
+		if err2 == nil && string(discBuf[:dn2]) != "ANIME_FIGHT_ROOM_READY_V1" {
+			t.Fatalf("Unexpected legacy discovery response: %s", string(discBuf[:dn2]))
+		}
 	}
 }
 

@@ -98,4 +98,33 @@ func TestAnimeFightingPacketParsing(t *testing.T) {
 	if len(active) != 1 {
 		t.Fatalf("expected 1 active game, got %d", len(active))
 	}
+	if active[0].Motd != "Комната готова к бою" {
+		t.Fatalf("expected Motd 'Комната готова к бою', got '%s'", active[0].Motd)
+	}
+
+	// Test new duration-annotated packet (e.g. 180 sec)
+	samplePacketWithDuration := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
+	mgr.parsePacket(samplePacketWithDuration, dummyAddr)
+
+	select {
+	case game := <-ch:
+		if game.Motd != "Время боя: 180 сек" {
+			t.Fatalf("expected Motd 'Время боя: 180 сек', got '%s'", game.Motd)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for duration-annotated game emit")
+	}
+
+	// Test unlimited time packet (0 sec)
+	samplePacketUnlimited := []byte("ANIME_FIGHT_ROOM_READY_V1|0")
+	mgr.parsePacket(samplePacketUnlimited, dummyAddr)
+
+	select {
+	case game := <-ch:
+		if game.Motd != "Время боя: Без лимита" {
+			t.Fatalf("expected Motd 'Время боя: Без лимита', got '%s'", game.Motd)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for unlimited game emit")
+	}
 }

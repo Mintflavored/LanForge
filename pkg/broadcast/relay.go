@@ -230,11 +230,27 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 		})
 	}
 
-	// Anime Fighting LAN format: ANIME_FIGHT_ROOM_READY_V1
+	// Anime Fighting LAN format: ANIME_FIGHT_ROOM_READY_V1 or ANIME_FIGHT_ROOM_READY_V1|<seconds>
 	if strings.Contains(text, "ANIME_FIGHT_ROOM_READY_V1") {
 		hostIP := "127.0.0.1"
 		if udpAddr, ok := src.(*net.UDPAddr); ok {
 			hostIP = udpAddr.IP.String()
+		}
+
+		motd := "Комната готова к бою"
+		if idx := strings.Index(text, "ANIME_FIGHT_ROOM_READY_V1|"); idx != -1 {
+			parts := strings.Split(text[idx:], "|")
+			if len(parts) >= 2 {
+				secStr := strings.TrimSpace(parts[1])
+				if end := strings.IndexAny(secStr, "\x00\r\n "); end != -1 {
+					secStr = secStr[:end]
+				}
+				if secStr == "0" {
+					motd = "Время боя: Без лимита"
+				} else if secStr != "" {
+					motd = fmt.Sprintf("Время боя: %s сек", secStr)
+				}
+			}
 		}
 
 		r.emit(DiscoveredGame{
@@ -247,7 +263,7 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 			Port:       27845,
 			Protocol:   "UDP",
 			DetectedAt: time.Now().UnixMilli(),
-			Motd:       "Комната готова к бою",
+			Motd:       motd,
 			Extra:      "2D Platform Fighter (ENet)",
 		})
 	}
