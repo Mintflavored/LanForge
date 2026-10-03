@@ -230,7 +230,10 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 		})
 	}
 
-	// Anime Fighting LAN format: ANIME_FIGHT_ROOM_READY_V1 or ANIME_FIGHT_ROOM_READY_V1|<seconds>
+	// Anime Fighting LAN format:
+	// - ANIME_FIGHT_ROOM_READY_V1
+	// - ANIME_FIGHT_ROOM_READY_V1|<seconds>
+	// - ANIME_FIGHT_ROOM_READY_V1|<seconds>|<mode> (e.g. 1v1 or 2v2)
 	if strings.Contains(text, "ANIME_FIGHT_ROOM_READY_V1") {
 		hostIP := "127.0.0.1"
 		if udpAddr, ok := src.(*net.UDPAddr); ok {
@@ -238,25 +241,46 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 		}
 
 		motd := "Комната готова к бою"
+		roomName := "Anime Fighting: Multiverse (LAN комната)"
+		extra := "2D Platform Fighter (ENet)"
+
 		if idx := strings.Index(text, "ANIME_FIGHT_ROOM_READY_V1|"); idx != -1 {
 			parts := strings.Split(text[idx:], "|")
+			secStr := ""
+			modeStr := ""
 			if len(parts) >= 2 {
-				secStr := strings.TrimSpace(parts[1])
+				secStr = strings.TrimSpace(parts[1])
 				if end := strings.IndexAny(secStr, "\x00\r\n "); end != -1 {
 					secStr = secStr[:end]
 				}
-				if secStr == "0" {
-					motd = "Время боя: Без лимита"
-				} else if secStr != "" {
-					motd = fmt.Sprintf("Время боя: %s сек", secStr)
+			}
+			if len(parts) >= 3 {
+				modeStr = strings.TrimSpace(parts[2])
+				if end := strings.IndexAny(modeStr, "\x00\r\n "); end != -1 {
+					modeStr = modeStr[:end]
 				}
+			}
+
+			modeName := "1 на 1"
+			if modeStr == "2v2" {
+				modeName = "2 на 2"
+				roomName = "Anime Fighting: Multiverse (2 на 2)"
+				extra = "Режим 2 на 2 · 2D Platform Fighter (ENet)"
+			}
+
+			if secStr == "0" {
+				motd = fmt.Sprintf("%s · Без лимита", modeName)
+			} else if secStr != "" {
+				motd = fmt.Sprintf("%s · Время боя: %s сек", modeName, secStr)
+			} else {
+				motd = fmt.Sprintf("%s · Комната готова к бою", modeName)
 			}
 		}
 
 		r.emit(DiscoveredGame{
 			ID:         fmt.Sprintf("animefight_%s_%d", hostIP, 27845),
 			GameName:   "Anime Fighting: Multiverse",
-			Name:       "Anime Fighting: Multiverse (LAN комната)",
+			Name:       roomName,
 			HostNick:   "Local Host",
 			HostIP:     hostIP,
 			IP:         hostIP,
@@ -264,7 +288,7 @@ func (r *RelayManager) parsePacket(data []byte, src net.Addr) {
 			Protocol:   "UDP",
 			DetectedAt: time.Now().UnixMilli(),
 			Motd:       motd,
-			Extra:      "2D Platform Fighter (ENet)",
+			Extra:      extra,
 		})
 	}
 }

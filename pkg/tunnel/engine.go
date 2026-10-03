@@ -531,10 +531,12 @@ func (e *TunnelEngine) startDiscoveryBeacon(port int) {
 	}
 	defer conn.Close()
 
-	// Anime Fighting protocol: v1.4+ expects ANIME_FIGHT_ROOM_READY_V1|<seconds>
-	// where seconds is in [60, 120, 180, 240, 300, 0]. Default is 180 (3 min).
-	// Legacy versions expect ANIME_FIGHT_ROOM_READY_V1 without suffix.
-	beaconMsgNew := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
+	// Anime Fighting protocol:
+	// v1.5+ format: ANIME_FIGHT_ROOM_READY_V1|<seconds>|<mode> (e.g. |180|1v1 or |180|2v2)
+	// v1.4 format:  ANIME_FIGHT_ROOM_READY_V1|<seconds>
+	// v1.0-1.3:     ANIME_FIGHT_ROOM_READY_V1
+	beaconMsgV2 := []byte("ANIME_FIGHT_ROOM_READY_V1|180|1v1")
+	beaconMsgV14 := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
 	beaconMsgLegacy := []byte("ANIME_FIGHT_ROOM_READY_V1")
 
 	for {
@@ -545,10 +547,12 @@ func (e *TunnelEngine) startDiscoveryBeacon(port int) {
 			if !e.running.Load() {
 				return
 			}
-			_, _ = conn.WriteToUDP(beaconMsgNew, unicastAddr)
+			_, _ = conn.WriteToUDP(beaconMsgV2, unicastAddr)
+			_, _ = conn.WriteToUDP(beaconMsgV14, unicastAddr)
 			_, _ = conn.WriteToUDP(beaconMsgLegacy, unicastAddr)
 			if broadcastAddr != nil {
-				_, _ = conn.WriteToUDP(beaconMsgNew, broadcastAddr)
+				_, _ = conn.WriteToUDP(beaconMsgV2, broadcastAddr)
+				_, _ = conn.WriteToUDP(beaconMsgV14, broadcastAddr)
 				_, _ = conn.WriteToUDP(beaconMsgLegacy, broadcastAddr)
 			}
 		}
@@ -574,9 +578,11 @@ func (e *TunnelEngine) readDiscoveryLoop() {
 		reqStr := string(buf[:n])
 		// Anime Fighting discovery query
 		if strings.Contains(reqStr, "ANIME_FIGHT_ROOM_SEARCH_V1") {
-			replyNew := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
+			replyV2 := []byte("ANIME_FIGHT_ROOM_READY_V1|180|1v1")
+			replyV14 := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
 			replyLegacy := []byte("ANIME_FIGHT_ROOM_READY_V1")
-			_, _ = e.udpDiscoveryListener.WriteToUDP(replyNew, remoteAddr)
+			_, _ = e.udpDiscoveryListener.WriteToUDP(replyV2, remoteAddr)
+			_, _ = e.udpDiscoveryListener.WriteToUDP(replyV14, remoteAddr)
 			_, _ = e.udpDiscoveryListener.WriteToUDP(replyLegacy, remoteAddr)
 			log.Printf("[Tunnel Discovery] Responded to Anime Fighting discovery query from %s", remoteAddr.String())
 		}

@@ -160,7 +160,7 @@ var AllPresets = []GamePreset{
 		Color:                 "#ec4899",
 		LanDiscoverySupported: true,
 		DiscoveryPort:         27846,
-		Description:           "2D-платформенный аниме-файтинг в стиле Brawlhalla. Поддерживает LAN-лобби и автопоиск комнат!",
+		Description:           "2D-платформенный аниме-файтинг в стиле Brawlhalla. Поддерживает дуэли (1 на 1), командные бои (2 на 2) и автопоиск комнат!",
 		ConnectHint:           "Онлайн · LAN / VPN -> Присоединиться (или ввести {HOST_IP}:27845)",
 	},
 }

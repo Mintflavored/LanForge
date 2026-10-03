@@ -304,15 +304,21 @@ func TestTunnelEngineUDPEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to read discovery response: %v", err)
 		}
-		if string(discBuf[:dn]) != "ANIME_FIGHT_ROOM_READY_V1|180" {
+		if string(discBuf[:dn]) != "ANIME_FIGHT_ROOM_READY_V1|180|1v1" {
 			t.Fatalf("Unexpected discovery response: %s", string(discBuf[:dn]))
 		}
 		t.Logf("SUCCESS: Discovery responder returned %s!", string(discBuf[:dn]))
 
-		// Also verify legacy fallback packet is sent
+		// Also verify v1.4 fallback packet is sent
 		dn2, err2 := discSender.Read(discBuf)
-		if err2 == nil && string(discBuf[:dn2]) != "ANIME_FIGHT_ROOM_READY_V1" {
-			t.Fatalf("Unexpected legacy discovery response: %s", string(discBuf[:dn2]))
+		if err2 == nil && string(discBuf[:dn2]) != "ANIME_FIGHT_ROOM_READY_V1|180" {
+			t.Fatalf("Unexpected v1.4 discovery response: %s", string(discBuf[:dn2]))
+		}
+
+		// Also verify legacy fallback packet is sent
+		dn3, err3 := discSender.Read(discBuf)
+		if err3 == nil && string(discBuf[:dn3]) != "ANIME_FIGHT_ROOM_READY_V1" {
+			t.Fatalf("Unexpected legacy discovery response: %s", string(discBuf[:dn3]))
 		}
 	}
 }

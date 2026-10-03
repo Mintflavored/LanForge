@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -102,14 +103,14 @@ func TestAnimeFightingPacketParsing(t *testing.T) {
 		t.Fatalf("expected Motd 'Комната готова к бою', got '%s'", active[0].Motd)
 	}
 
-	// Test new duration-annotated packet (e.g. 180 sec)
+	// Test duration-annotated packet (e.g. 180 sec)
 	samplePacketWithDuration := []byte("ANIME_FIGHT_ROOM_READY_V1|180")
 	mgr.parsePacket(samplePacketWithDuration, dummyAddr)
 
 	select {
 	case game := <-ch:
-		if game.Motd != "Время боя: 180 сек" {
-			t.Fatalf("expected Motd 'Время боя: 180 сек', got '%s'", game.Motd)
+		if game.Motd != "1 на 1 · Время боя: 180 сек" {
+			t.Fatalf("expected Motd '1 на 1 · Время боя: 180 сек', got '%s'", game.Motd)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for duration-annotated game emit")
@@ -121,10 +122,29 @@ func TestAnimeFightingPacketParsing(t *testing.T) {
 
 	select {
 	case game := <-ch:
-		if game.Motd != "Время боя: Без лимита" {
-			t.Fatalf("expected Motd 'Время боя: Без лимита', got '%s'", game.Motd)
+		if game.Motd != "1 на 1 · Без лимита" {
+			t.Fatalf("expected Motd '1 на 1 · Без лимита', got '%s'", game.Motd)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for unlimited game emit")
+	}
+
+	// Test 2v2 team battle packet
+	samplePacketTeam := []byte("ANIME_FIGHT_ROOM_READY_V1|180|2v2")
+	mgr.parsePacket(samplePacketTeam, dummyAddr)
+
+	select {
+	case game := <-ch:
+		if game.Motd != "2 на 2 · Время боя: 180 сек" {
+			t.Fatalf("expected Motd '2 на 2 · Время боя: 180 сек', got '%s'", game.Motd)
+		}
+		if game.Name != "Anime Fighting: Multiverse (2 на 2)" {
+			t.Fatalf("expected room name 'Anime Fighting: Multiverse (2 на 2)', got '%s'", game.Name)
+		}
+		if !strings.Contains(game.Extra, "2 на 2") {
+			t.Fatalf("expected Extra to contain '2 на 2', got '%s'", game.Extra)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for 2v2 team game emit")
 	}
 }
